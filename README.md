@@ -5,14 +5,14 @@ While we try to provide tests for all the functionality, the repo has not (yet) 
 
 ## Introduction 
 
-**TO DO**
+See [dp-transformers](https://www.microsoft.com/en-us/research/project/dp-transformers) for a brief introduction to our repository.
 
 ## Installation
 
 For installing the `dp-transformers` package, you can just type
 
 ```
-pip install dp-transformers
+pip install .
 ```
 
 ## Examples
@@ -66,7 +66,7 @@ privacy_engine = opacus.PrivacyEngine(module=model, ...)
 trainer = transformers.Trainer(
     model = model,
     [...],
-    callbacks = [ dp_transformers.PrivacyEngineCallback(privacy_engine)]  # <-- Add this line to make sure the privacy engine is used in the trainer
+    callbacks = [dp_transformers.PrivacyEngineCallback(privacy_engine)]  # <-- Add this line to make sure the privacy engine is used in the trainer
     [...]
 )
 ```
@@ -129,7 +129,15 @@ Definitely, before a `PrivacyEngine` is instantiated.
 
 ## How to Cite
 
-**TO DO**
+```
+@misc{dp-transformers,
+  author        = {Lukas Wutschitz and Huseyin A. Inan and Andre Manoel},
+  title         = {dp-transformers: Training transformer models with differential privacy},
+  year          = {2022},
+  month         = {August},
+  howpublished  = {\url{https://www.microsoft.com/en-us/research/project/dp-transformers}}
+}
+```
 
 ## Contributing
 
