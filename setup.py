@@ -19,7 +19,7 @@ setup(
     author='Microsoft',
     packages=find_packages('src'),
     package_dir={'': 'src'},
-    python_requires=">=3.7.0",
+    python_requires=">=3.7.0,<3.10.0",
     include_package_data=True,
     extras_require={
         "test": [
