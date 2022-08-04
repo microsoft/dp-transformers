@@ -1,0 +1,42 @@
+description: opacus-utils-examples-summarization
+
+environment:
+  registry: mcr.microsoft.com
+  image: azureml/openmpi4.1.0-cuda11.1-cudnn8-ubuntu18.04:latest
+  conda_yaml_file: $CONFIG_DIR/environment.yml # requires amlt>=8.2.1.post1
+  setup:
+    - pip install .
+
+code:
+  local_dir: $CONFIG_DIR/../../
+
+jobs:
+  - name: gpt2-full-dp-16v100-epochs_3-eps_8
+    sku: 32G16-V100
+    command:
+      - python -m torch.distributed.run --nproc_per_node 16 examples/language-summarization/fine-tune-bart-dp.py
+        "--output_dir", "$$AMLT_OUTPUT_DIR",
+        "--model_name", "facebook/bart-large",
+        "--per_device_train_batch_size", "32",
+        "--gradient_accumulation_steps", "2",
+        "--evaluation_strategy", "steps",
+        "--eval_steps", "27",
+        "--log_level", "info",
+        "--per_device_eval_batch_size", "64",
+        "--eval_accumulation_steps", "1",
+        "--seed", "42",
+        "--target_epsilon", "8",
+        "--per_sample_max_grad_norm", "1.0",
+        "--prediction_loss_only",
+        "--weight_decay", "0.01",
+        "--remove_unused_columns", "False",
+        "--num_train_epochs", "3",
+        "--logging_steps", "3",
+        "--max_grad_norm", "0",
+        "--lr_scheduler_type", "constant",
+        "--learning_rate", "1e-4",
+        "--disable_tqdm", "True",
+        "--dataloader_num_workers", "2"
+        $EXTRA_ARGS
+    submit_args:
+      max_attempts: 1
