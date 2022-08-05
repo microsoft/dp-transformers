@@ -1,7 +1,7 @@
 # Train BART-type models with DP
 
 import datasets
-import opacus_utils
+import dp_transformers
 import transformers
 import opacus
 import nltk
@@ -43,8 +43,8 @@ class ModelArguments:
 
 @dataclass
 class Arguments:
-    train: opacus_utils.TrainingArguments
-    privacy: opacus_utils.PrivacyArguments
+    train: dp_transformers.TrainingArguments
+    privacy: dp_transformers.PrivacyArguments
     model: ModelArguments
 
 
@@ -132,15 +132,15 @@ def main(args: Arguments):
 
     model.train()
 
-    opacus_utils.register_grad_sampler_bart_cond()
+    dp_transformers.register_grad_sampler_bart_cond()
 
     if train_args.parallel_mode == ParallelMode.DISTRIBUTED:
-        model = opacus_utils.dp_utils.DifferentiallyPrivateDistributedDataParallel(model)
+        model = dp_transformers.dp_utils.DifferentiallyPrivateDistributedDataParallel(model)
 
     sampling_probability = train_args.per_device_train_batch_size*train_args.world_size*train_args.gradient_accumulation_steps/len(dataset['train'])
     num_steps = int(train_args.num_train_epochs*(1/sampling_probability+1))
     if privacy_args.noise_multiplier is None: 
-        noise_multiplier = opacus_utils.dp_utils.find_noise_multiplier(
+        noise_multiplier = dp_transformers.dp_utils.find_noise_multiplier(
             sampling_probability=sampling_probability,
             num_steps=num_steps,
             target_delta=1.0/len(dataset['train']),
@@ -165,7 +165,7 @@ def main(args: Arguments):
         max_compositions=num_steps
     )
 
-    data_collator = opacus_utils.DataCollatorForPrivateSeq2Seq(tokenizer)
+    data_collator = dp_transformers.DataCollatorForPrivateSeq2Seq(tokenizer)
 
     # Metric
     metric = datasets.load_metric("rouge")
@@ -203,13 +203,13 @@ def main(args: Arguments):
         return result
 
 
-    trainer = opacus_utils.dp_utils.OpacusDPTrainer(
+    trainer = dp_transformers.dp_utils.OpacusDPTrainer(
         args=train_args,
         model=model,
         train_dataset=train_dataset,
         eval_dataset=None,
         callbacks=[
-            opacus_utils.PrivacyEngineCallback(
+            dp_transformers.PrivacyEngineCallback(
                 privacy_engine,
                 lambda s: privacy_acccountant.compute_epsilon(s)[2]
             )
@@ -229,6 +229,6 @@ def main(args: Arguments):
         })
 
 if __name__ == "__main__":    
-    arg_parser = transformers.HfArgumentParser((opacus_utils.TrainingArguments, opacus_utils.PrivacyArguments, ModelArguments))
+    arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, dp_transformers.PrivacyArguments, ModelArguments))
     train_args, privacy_args, model_args = arg_parser.parse_args_into_dataclasses()
     main(Arguments(train=train_args, privacy=privacy_args, model=model_args))

@@ -1,4 +1,4 @@
-name: opacus-utils-examples-language-summarization
+name: dp-transformers-examples-bart-summarization
 channels:
   - pytorch
   - defaults

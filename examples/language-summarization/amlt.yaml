@@ -1,4 +1,4 @@
-description: opacus-utils-examples-summarization
+description: dp-transformers-examples-bart-summarization
 
 environment:
   registry: mcr.microsoft.com
