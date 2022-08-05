@@ -99,15 +99,6 @@ class DataCollatorForPrivateSeq2Seq(DataCollatorForSeq2Seq):
     def __call__(self, examples: List[Union[List[int], torch.Tensor, Dict[str, torch.Tensor]]]) -> Dict[str, torch.Tensor]:
         batch = super().__call__(examples)
 
-        # Huggingface's default way of constructing position_ids is not compatible with Opacus
-        # since Opacus is not able to deduce the batch size from the input. Here we manually
-        # generate a position_ids tensor which has the same values as Huggingface's default tensor
-        # but it is constructed in a way that is compatile with Opacus by using expand_as.
-        # if "position_ids" not in batch:
-        #     input_ids = batch["input_ids"]
-        #     batch["position_ids"] = torch.arange(
-        #         input_ids.shape[1], dtype=torch.long, device=input_ids.device
-        #     ).repeat(input_ids.shape[0], 1)
         return batch
 
 
