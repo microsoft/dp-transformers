@@ -11,7 +11,7 @@ code:
   local_dir: $CONFIG_DIR/../../
 
 jobs:
-  - name: gpt2-full-dp-16v100-epochs_3-eps_8
+  - name: bart-dp-16v100-epochs_3-eps_8
     sku: 32G16-V100
     command:
       - python -m torch.distributed.run --nproc_per_node 16 examples/language-summarization/fine-tune-bart-dp.py
