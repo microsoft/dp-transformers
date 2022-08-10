@@ -67,7 +67,8 @@ dependencies:
     - tomli==2.0.1
     - torch==1.9.1
     - tqdm==4.64.0
-    - transformers==4.20.1
+    # - transformers==4.20.1
+    - git+https://github.com/donebydan/transformers@bart-pos-emb-signature-change
     - typing-extensions==4.2.0
     - urllib3==1.26.9
     - xxhash==3.0.0

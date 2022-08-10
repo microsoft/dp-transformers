@@ -4,7 +4,7 @@
 from transformers import TrainingArguments as HfTrainingArguments
 from transformers import IntervalStrategy, logging
 from dataclasses import dataclass, field
-from datasets.utils.logging import disable_progress_bar
+from datasets import tqdm_utils
 
 from typing import Optional
 
@@ -55,4 +55,4 @@ class TrainingArguments(HfTrainingArguments):
             self.max_steps = 2
 
         if self.disable_tqdm:
-            disable_progress_bar()
+            tqdm_utils.disable_progress_bar()

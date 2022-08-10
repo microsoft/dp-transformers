@@ -79,9 +79,9 @@ def main(args: Arguments):
 
     # Load data
     dataset = datasets.load_dataset('cnn_dailymail', '3.0.0', cache_dir=args.model.cache_dir)
-    dataset['train'] = dataset['train'].select(range(100))
-    dataset['validation'] = dataset['validation'].select(range(100))
-    dataset['test'] = dataset['test'].select(range(100))
+    dataset['train'] = dataset['train'] #.select(range(100))
+    dataset['validation'] = dataset['validation'] #.select(range(100))
+    dataset['test'] = dataset['test'] #.select(range(100))
 
     # Load tokenizer
     tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name)
@@ -118,7 +118,14 @@ def main(args: Arguments):
         train_dataset = dataset["train"]
         train_dataset = train_dataset.map(
             preprocess_function,
-            batched=True, num_proc=1, desc="tokenizing dataset", remove_columns=dataset["train"].column_names
+            batched=True, num_proc=6, desc="tokenizing dataset", remove_columns=dataset["train"].column_names
+        )
+
+    with train_args.main_process_first(desc="tokenizing eval dataset"):
+        eval_dataset = dataset["validation"]
+        eval_dataset = eval_dataset.map(
+            preprocess_function,
+            batched=True, num_proc=6, desc="tokenizing dataset", remove_columns=dataset["train"].column_names
         )
 
     if train_args.local_rank == 0:
@@ -199,7 +206,6 @@ def main(args: Arguments):
         prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds]
         result["gen_len"] = np.mean(prediction_lens)
         result = {k: round(v, 4) for k, v in result.items()}
-        trainer.log(result)
         return result
 
 
@@ -207,7 +213,7 @@ def main(args: Arguments):
         args=train_args,
         model=model,
         train_dataset=train_dataset,
-        eval_dataset=None,
+        eval_dataset=eval_dataset,
         callbacks=[
             dp_transformers.PrivacyEngineCallback(
                 privacy_engine,
