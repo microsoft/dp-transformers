@@ -1,6 +1,7 @@
 # Train BART-type models with DP
 
 import datasets
+import evaluate
 import dp_transformers
 import transformers
 import opacus
@@ -20,7 +21,13 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelArguments:
-    model_name: str
+    model_name: str = field(default="facebook/bart-large", metadata={
+        "help": "Model name in HuggingFace, e.g. 'bart-large'"
+    })
+
+    dataset_name: str = field(default="cnn_dailymail", metadata={
+        "help": "Dataset compatible with model's task (e.g. summarization)"
+    })
 
     max_source_length: int = field(default=1024, metadata={
         "help": (
@@ -78,19 +85,19 @@ def main(args: Arguments):
     model = model.to(train_args.device)
 
     # Load data
-    dataset = datasets.load_dataset('cnn_dailymail', '3.0.0', cache_dir=args.model.cache_dir)
-    dataset['train'] = dataset['train'] #.select(range(100))
-    dataset['validation'] = dataset['validation'] #.select(range(100))
-    dataset['test'] = dataset['test'] #.select(range(100))
+    if model_args.dataset_name == "cnn_dailymail":
+        dataset = datasets.load_dataset('cnn_dailymail', '3.0.0', cache_dir=args.model.cache_dir)
+        text_column, summary_column = 'article', 'highlights' # specific to cnn_dailymail
+    elif model_args.dataset_name == "big_patent":
+        dataset = datasets.load_dataset('big_patent', 'g', cache_dir=args.model.cache_dir)
+        text_column, summary_column = 'description', 'abstract' # specific to big_patent ds
+
 
     # Load tokenizer
     tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name)
 
     def preprocess_function(examples):
     # HF preprocess method, removing pairs where at least one record is None
-        text_column, summary_column = 'article', 'highlights' # specific to cnn_dailymail
-        # text_column, summary_column = 'description', 'abstract' # specific to big_patent ds
-
         inputs, targets = [], []
         for i in range(len(examples[text_column])):
             if examples[text_column][i] is not None and examples[summary_column][i] is not None:
@@ -175,7 +182,7 @@ def main(args: Arguments):
     data_collator = dp_transformers.DataCollatorForPrivateSeq2Seq(tokenizer)
 
     # Metric
-    metric = datasets.load_metric("rouge")
+    metric = evaluate.load('rouge')
     
     def postprocess_text(preds, labels):
         preds = [pred.strip() for pred in preds]
@@ -186,6 +193,7 @@ def main(args: Arguments):
         labels = ["\n".join(nltk.sent_tokenize(label)) for label in labels]
 
         return preds, labels
+
 
     def compute_metrics(eval_preds):
         preds, labels = eval_preds
@@ -208,6 +216,9 @@ def main(args: Arguments):
         result = {k: round(v, 4) for k, v in result.items()}
         return result
 
+
+    train_args.prediction_loss_only = False
+    train_args.predict_with_generate = True
 
     trainer = dp_transformers.dp_utils.OpacusDPTrainer(
         args=train_args,
@@ -234,7 +245,7 @@ def main(args: Arguments):
             "final_epsilon_rdp": eps_rdp
         })
 
-if __name__ == "__main__":    
+if __name__ == "__main__":
     arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, dp_transformers.PrivacyArguments, ModelArguments))
     train_args, privacy_args, model_args = arg_parser.parse_args_into_dataclasses()
     main(Arguments(train=train_args, privacy=privacy_args, model=model_args))
