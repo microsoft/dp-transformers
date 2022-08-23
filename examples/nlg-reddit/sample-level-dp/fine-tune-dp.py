@@ -111,7 +111,8 @@ def main(args: Arguments):
     else:
         dp_transformers.register_grad_sampler_gpt2()
 
-    model = dp_transformers.dp_utils.DifferentiallyPrivateDistributedDataParallel(model)
+    if train_args.n_gpu > 1:
+        model = dp_transformers.dp_utils.DifferentiallyPrivateDistributedDataParallel(model)
 
     sampling_probability = train_args.per_device_train_batch_size*train_args.world_size*train_args.gradient_accumulation_steps/len(dataset['train'])
     num_steps = int(train_args.num_train_epochs*(1/sampling_probability+1))
