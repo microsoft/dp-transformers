@@ -19,7 +19,7 @@ setup(
     author='Microsoft',
     packages=find_packages('src'),
     package_dir={'': 'src'},
-    python_requires=">=3.7.0,<3.10.0",
+    python_requires=">=3.7.0",
     include_package_data=True,
     extras_require={
         "test": [
@@ -30,9 +30,9 @@ setup(
     install_requires=[
         "transformers>=4.10.0",
         "datasets<2.0.0",
-        "opacus<1.0.0",
+        "opacus==1.1.3",
         "prv-accountant",
-        "torch<1.10"
+        "torch==1.12.1"
     ],
     test_suite="tests",
     zip_safe=False

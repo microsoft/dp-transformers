@@ -128,16 +128,22 @@ def main(args: Arguments):
     if train_args.local_rank == 0:
         logger.info(f"The noise multiplier is set to be: {noise_multiplier}")
 
-    privacy_engine = opacus.PrivacyEngine(module=model,
-        batch_size=train_args.per_device_train_batch_size*train_args.gradient_accumulation_steps, sample_size=len(dataset['train']),
-        max_grad_norm=privacy_args.per_sample_max_grad_norm, noise_multiplier=noise_multiplier, target_delta=1.0/len(dataset['train'])
-    )
-    # Privacy engine has already an accountant (`get_privacy_spent`) but it is overly pessimistic.
-    # Hence, we use a more accurate accountant separately.
-    privacy_acccountant = prv_accountant.Accountant(
+    # Wrap model so that per-sample gradients are computed
+    model = opacus.GradSampleModule(model)
+
+    # Collect all DP-related params for passing to HF trainer
+    privacy_params = {
+        'noise_multiplier': noise_multiplier,
+        'max_grad_norm': privacy_args.per_sample_max_grad_norm,
+        'expected_batch_size': train_args.per_device_train_batch_size * train_args.gradient_accumulation_steps,
+        'target_delta': 1.0 / len(dataset['train']),
+    }
+
+    # A more accurate accountant than the ones provided by Opacus
+    privacy_accountant = prv_accountant.Accountant(
         noise_multiplier=noise_multiplier,
         sampling_probability=sampling_probability,
-        delta=1.0/len(dataset['train']),
+        delta=privacy_params['target_delta'],
         eps_error=0.1,
         max_compositions=num_steps
     )
@@ -146,13 +152,13 @@ def main(args: Arguments):
 
     trainer = dp_transformers.dp_utils.OpacusDPTrainer(
         args=train_args,
+        privacy_params=privacy_params,
         model=model,
         train_dataset=dataset['train'],
         eval_dataset=dataset['test'],
         callbacks=[
-            dp_transformers.PrivacyEngineCallback(
-                privacy_engine,
-                lambda s: privacy_acccountant.compute_epsilon(s)[2]
+            dp_transformers.DPCallback(
+                lambda s: privacy_accountant.compute_epsilon(s)[2]
             )
         ],
         data_collator=data_collator
@@ -161,8 +167,8 @@ def main(args: Arguments):
     try:
         trainer.train()
     finally:
-        eps_prv = privacy_acccountant.compute_epsilon(privacy_engine.steps)[2]
-        eps_rdp, alpha = privacy_engine.get_privacy_spent(1.0/len(dataset['train']))
+        eps_prv = privacy_accountant.compute_epsilon(trainer.state.global_steps)[2]
+        eps_rdp = trainer.accountant.get_epsilon(privacy_params['target_delta'])
         trainer.log({
             "final_epsilon_prv": eps_prv,
             "final_epsilon_rdp": eps_rdp

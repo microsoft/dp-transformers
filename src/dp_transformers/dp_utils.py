@@ -13,7 +13,7 @@ from transformers import (
     DataCollatorForLanguageModeling, PreTrainedTokenizer, training_args
 )
 from transformers.file_utils import is_sagemaker_mp_enabled, is_datasets_available
-from opacus import PrivacyEngine, layers
+import opacus
 from dp_transformers import sampler
 from prv_accountant import Accountant
 from scipy import optimize
@@ -23,32 +23,24 @@ from typing import Any, Callable, Tuple, List, Optional, Union, Dict, Sequence
 logger = logging.get_logger(__name__)
 
 
-class PrivacyEngineCallback(TrainerCallback):
+class DPCallback(TrainerCallback):
     """
     This class registers all the necessary callbacks to make transformers.Trainer compatible with opacus.
     """
-    def __init__(self, privacy_engine: PrivacyEngine, compute_epsilon: Optional[Callable[[int], float]] = None,
+    def __init__(self, compute_epsilon: Optional[Callable[[int], float]] = None,
                  max_epsilon: float = float('inf')) -> None:
-        self.privacy_engine = privacy_engine
         self.max_epsilon = max_epsilon
         self.on_substep_end_was_called = False
         if not compute_epsilon:
-            self.compute_epsilon = lambda _: self.privacy_engine.get_privacy_spent()[0]
+            self.compute_epsilon = lambda _: self.accountant.get_epsilon(self.privacy_params['target_delta'])
         else:
             self.compute_epsilon = compute_epsilon
 
-    def on_train_begin(self, args: training_args.TrainingArguments, state: TrainerState,
-                       control: TrainerControl, optimizer: torch.optim.Optimizer, **kwargs):
-        self.privacy_engine.to(args.device)
-        self.privacy_engine.attach(optimizer)
-
     def on_substep_end(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
-        self.privacy_engine.virtual_step()
+        self.optimizer.signal_skip_step(do_skip=True)
         self.on_substep_end_was_called = True
 
     def on_step_end(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
-        # We don't need to do anything here since optimizer.step is monkey patched to privacy_engine.step
-        # and optimizer.step is called by the trainer already.
         if not (
             args.gradient_accumulation_steps <= 1 or
             self.on_substep_end_was_called
@@ -58,6 +50,8 @@ class PrivacyEngineCallback(TrainerCallback):
                 "Make sure you're using a recent version of transformers (>=4.10.0) "
                 "which has an appropriate callback in the trainer."
             )
+        self.optimizer.signal_skip_step(do_skip=False)
+        self.accountant.step()
 
     def on_save(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
         return self._check_max_epsilon_exceeded(control)
@@ -92,7 +86,7 @@ class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeli
         return batch
 
 
-class DifferentiallyPrivateDistributedDataParallel(layers.DifferentiallyPrivateDistributedDataParallel):
+class DifferentiallyPrivateDistributedDataParallel(opacus.optimizers.DistributedDPOptimizer):
     """
     Little wrapper to provide `no_sync` context which is assumed by Huggingface trainer.
     We don't need to do anything in addition here
@@ -174,9 +168,29 @@ class OpacusDPTrainer(Trainer):
         as this is already handled by Opacus package.
         (ii) enable author-level DP training by modifing the sampler and the dataloader. In the case
         of sample-level DP, each sample can be represented by a unique author.
+        (iii) wrap the optimizer with Opacus' DPOptimizer/DistributedDPOptimizer
     """
-    def __init__(self, *args: Tuple, author_mapping: Optional[Sequence[Sequence[int]]]=None, **kwargs: Dict) -> None:
+    def __init__(self, *args: Tuple, privacy_params: Dict, author_mapping: Optional[Sequence[Sequence[int]]]=None, **kwargs: Dict) -> None:
         super().__init__(*args, **kwargs)
+
+        self.privacy_params = privacy_params
+
+        # For Opacus 1.xx, we need to wrap the optimizer
+        if self.args.n_gpu > 1:
+            optimizer_generator = DifferentiallyPrivateDistributedDataParallel
+        else:
+            optimizer_generator = opacus.optimizers.DPOptimizer
+
+        self.optimizer = optimizer_generator(
+            optimizer=self.optimizer,
+            noise_multiplier=self.privacy_params['noise_multiplier'],
+            max_grad_norm=self.privacy_params['max_grad_norm'],
+            expected_batch_size=self.privacy_params['expected_batch_size'],
+        )
+
+        # Opacus accountant since there is no more privacy engine
+        self.accountant = opacus.accountants.RDPAccountant()
+
         # Sample-level DP is equivalent to mapping each sample to a unique author. 
         if author_mapping is None:
             author_mapping = [[i] for i in range(len(self.train_dataset))]
