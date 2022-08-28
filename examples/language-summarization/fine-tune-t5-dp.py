@@ -216,7 +216,9 @@ def main(args: Arguments):
     )
 
     try:
-        trainer.train()
+        train_result = trainer.train()
+        metrics = train_result.metrics
+        trainer.log_metrics("train", metrics)
     finally:
         eps_prv = privacy_acccountant.compute_epsilon(privacy_engine.steps)[2]
         eps_rdp, alpha = privacy_engine.get_privacy_spent(target_delta_calc)
