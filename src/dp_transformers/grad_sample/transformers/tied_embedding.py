@@ -23,6 +23,8 @@ def compute_tied_embedding_grad_sample(
         B: Backpropagations
         batch_dim: Batch dimension position
     """
+    ret = {}
+
     saved = torch.backends.cudnn.deterministic
     torch.backends.cudnn.deterministic = True
 
@@ -38,8 +40,8 @@ def compute_tied_embedding_grad_sample(
     grad_sample.scatter_add_(1, index, B.reshape(batch_size, -1, layer.embedding_dim))
     torch.backends.cudnn.deterministic = saved
 
-    utils.create_or_accumulate_grad_sample(layer.weight, grad_sample, layer)
-
+    ret[layer.weight] = grad_sample
+    return ret
 
 def register_grad_sampler() -> None:
     utils.register_grad_sampler(nn.Embedding)(compute_tied_embedding_grad_sample)

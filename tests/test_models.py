@@ -21,10 +21,10 @@ def test_gpt2_grad_sample_layers_registered():
 
     # We haven't registered the grad samples yet so make sure that it actually fails
     with pytest.raises(UnsupportedModuleError):
-        validator.validate(model)
+        validator.validate(model, strict=True)
 
     # Register the grad samples
     register_grad_sampler_gpt2()
 
     # Now make sure that it works
-    validator.validate(model)
+    validator.validate(model, strict=True)
