@@ -6,7 +6,7 @@ import numpy as np
 import datasets
 from datasets import Dataset
 import torch
-from torch import Tensor, nn
+from torch import nn
 from torch.utils.data import DataLoader
 from transformers import (
     Trainer, TrainerCallback, TrainerState, TrainerControl, logging,
@@ -17,7 +17,6 @@ import opacus
 from dp_transformers import sampler
 from prv_accountant import Accountant
 from scipy import optimize
-from contextlib import contextmanager
 from typing import Any, Callable, Tuple, List, Optional, Union, Dict, Sequence
 
 logger = logging.get_logger(__name__)
@@ -27,8 +26,11 @@ class DPCallback(TrainerCallback):
     """
     This class registers all the necessary callbacks to make transformers.Trainer compatible with opacus.
     """
-    def __init__(self, compute_epsilon: Optional[Callable[[int], float]] = None,
+    def __init__(self, privacy_params: Dict, compute_epsilon: Optional[Callable[[int], float]] = None,
                  max_epsilon: float = float('inf')) -> None:
+        self.privacy_params = privacy_params
+        self.accountant = opacus.accountants.RDPAccountant()
+
         self.max_epsilon = max_epsilon
         self.on_substep_end_was_called = False
         if not compute_epsilon:
@@ -36,11 +38,15 @@ class DPCallback(TrainerCallback):
         else:
             self.compute_epsilon = compute_epsilon
 
+    def on_step_begin(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, optimizer=None, **kwargs): 
+        optimizer.zero_grad()  # Opacus is bothered that HF does not call .zero_grad() on the optimizer
+
     def on_substep_end(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, optimizer=None, **kwargs):
         if optimizer is None:
             raise RuntimeError("Impossible to access optimizer from inside callback")
         optimizer.signal_skip_step(do_skip=True)
         optimizer.step()
+        optimizer.zero_grad()
 
         self.on_substep_end_was_called = True
 
@@ -59,7 +65,7 @@ class DPCallback(TrainerCallback):
             raise RuntimeError("Impossible to access optimizer from inside callback")
         optimizer.signal_skip_step(do_skip=False)
 
-        self.accountant.step()
+        self.accountant.step(noise_multiplier=self.privacy_params['noise_multiplier'], sample_rate=self.privacy_params['sampling_probability'])
 
     def on_save(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
         return self._check_max_epsilon_exceeded(control)
@@ -92,16 +98,6 @@ class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeli
                 input_ids.shape[1], dtype=torch.long, device=input_ids.device
             ).repeat(input_ids.shape[0], 1)
         return batch
-
-
-class DifferentiallyPrivateDistributedDataParallel(opacus.optimizers.DistributedDPOptimizer):
-    """
-    Little wrapper to provide `no_sync` context which is assumed by Huggingface trainer.
-    We don't need to do anything in addition here
-    """
-    @contextmanager
-    def no_sync(self):
-        yield
 
 
 def find_noise_multiplier(sampling_probability: float, num_steps: int, target_epsilon: float, target_delta: float,
@@ -182,9 +178,6 @@ class OpacusDPTrainer(Trainer):
         super().__init__(*args, **kwargs)
 
         self.privacy_params = privacy_params
-
-        # Opacus accountant since there is no more privacy engine
-        self.accountant = opacus.accountants.RDPAccountant()
 
         # Sample-level DP is equivalent to mapping each sample to a unique author. 
         if author_mapping is None:

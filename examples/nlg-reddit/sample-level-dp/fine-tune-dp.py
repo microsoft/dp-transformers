@@ -10,6 +10,7 @@ import opacus
 import sys
 import logging
 import prv_accountant
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from dataclasses import dataclass, field
 from dp_transformers.layers.dp_merged_linear import mark_only_lora_as_trainable
@@ -112,7 +113,7 @@ def main(args: Arguments):
         dp_transformers.register_grad_sampler_gpt2()
 
     if train_args.n_gpu > 1:
-        model = dp_transformers.dp_utils.DifferentiallyPrivateDistributedDataParallel(model)
+        model = DDP(model)
 
     sampling_probability = train_args.per_device_train_batch_size*train_args.world_size*train_args.gradient_accumulation_steps/len(dataset['train'])
     num_steps = int(train_args.num_train_epochs*(1/sampling_probability+1))
@@ -137,6 +138,7 @@ def main(args: Arguments):
         'max_grad_norm': privacy_args.per_sample_max_grad_norm,
         'expected_batch_size': train_args.per_device_train_batch_size * train_args.gradient_accumulation_steps,
         'target_delta': 1.0 / len(dataset['train']),
+        'sampling_probability': sampling_probability,
     }
 
     # A more accurate accountant than the ones provided by Opacus
@@ -150,17 +152,17 @@ def main(args: Arguments):
 
     data_collator = dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer)
 
+    dp_callback = dp_transformers.DPCallback(
+        privacy_params,
+        lambda s: privacy_accountant.compute_epsilon(s)[2]
+    )
     trainer = dp_transformers.dp_utils.OpacusDPTrainer(
         args=train_args,
         privacy_params=privacy_params,
         model=model,
         train_dataset=dataset['train'],
         eval_dataset=dataset['test'],
-        callbacks=[
-            dp_transformers.DPCallback(
-                lambda s: privacy_accountant.compute_epsilon(s)[2]
-            )
-        ],
+        callbacks=[dp_callback],
         data_collator=data_collator
     )
 
@@ -168,7 +170,7 @@ def main(args: Arguments):
         trainer.train()
     finally:
         eps_prv = privacy_accountant.compute_epsilon(trainer.state.global_step)[2]
-        eps_rdp = trainer.accountant.get_epsilon(privacy_params['target_delta'])
+        eps_rdp = dp_callback.accountant.get_epsilon(privacy_params['target_delta'])
         trainer.log({
             "final_epsilon_prv": eps_prv,
             "final_epsilon_rdp": eps_rdp
