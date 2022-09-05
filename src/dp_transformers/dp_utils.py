@@ -17,6 +17,7 @@ import opacus
 from dp_transformers import sampler
 from prv_accountant import Accountant
 from scipy import optimize
+from contextlib import contextmanager
 from typing import Any, Callable, Tuple, List, Optional, Union, Dict, Sequence
 
 logger = logging.get_logger(__name__)
@@ -98,6 +99,16 @@ class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeli
                 input_ids.shape[1], dtype=torch.long, device=input_ids.device
             ).repeat(input_ids.shape[0], 1)
         return batch
+
+
+class DifferentiallyPrivateDistributedDataParallel(opacus.distributed.DifferentiallyPrivateDistributedDataParallel):
+    """
+    Little wrapper to provide `no_sync` context which is assumed by Huggingface trainer.
+    We don't need to do anything in addition here
+    """
+    @contextmanager
+    def no_sync(self):
+        yield
 
 
 def find_noise_multiplier(sampling_probability: float, num_steps: int, target_epsilon: float, target_delta: float,

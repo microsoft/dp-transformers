@@ -10,7 +10,6 @@ import opacus
 import sys
 import logging
 import prv_accountant
-from torch.nn.parallel import DistributedDataParallel as DDP
 
 from dataclasses import dataclass, field
 from dp_transformers.layers.dp_merged_linear import mark_only_lora_as_trainable
@@ -113,7 +112,7 @@ def main(args: Arguments):
         dp_transformers.register_grad_sampler_gpt2()
 
     if train_args.n_gpu > 1:
-        model = DDP(model)
+        model = dp_transformers.dp_utils.DifferentiallyPrivateDistributedDataParallel(model)
 
     sampling_probability = train_args.per_device_train_batch_size*train_args.world_size*train_args.gradient_accumulation_steps/len(dataset['train'])
     num_steps = int(train_args.num_train_epochs*(1/sampling_probability+1))
