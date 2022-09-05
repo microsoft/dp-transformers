@@ -167,7 +167,7 @@ def main(args: Arguments):
     try:
         trainer.train()
     finally:
-        eps_prv = privacy_accountant.compute_epsilon(trainer.state.global_steps)[2]
+        eps_prv = privacy_accountant.compute_epsilon(trainer.state.global_step)[2]
         eps_rdp = trainer.accountant.get_epsilon(privacy_params['target_delta'])
         trainer.log({
             "final_epsilon_prv": eps_prv,

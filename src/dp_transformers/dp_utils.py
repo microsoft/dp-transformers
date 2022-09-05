@@ -36,11 +36,15 @@ class DPCallback(TrainerCallback):
         else:
             self.compute_epsilon = compute_epsilon
 
-    def on_substep_end(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
-        self.optimizer.signal_skip_step(do_skip=True)
+    def on_substep_end(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, optimizer=None, **kwargs):
+        if optimizer is None:
+            raise RuntimeError("Impossible to access optimizer from inside callback")
+        optimizer.signal_skip_step(do_skip=True)
+        optimizer.step()
+
         self.on_substep_end_was_called = True
 
-    def on_step_end(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
+    def on_step_end(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, optimizer=None, **kwargs):
         if not (
             args.gradient_accumulation_steps <= 1 or
             self.on_substep_end_was_called
@@ -50,7 +54,11 @@ class DPCallback(TrainerCallback):
                 "Make sure you're using a recent version of transformers (>=4.10.0) "
                 "which has an appropriate callback in the trainer."
             )
-        self.optimizer.signal_skip_step(do_skip=False)
+
+        if optimizer is None:
+            raise RuntimeError("Impossible to access optimizer from inside callback")
+        optimizer.signal_skip_step(do_skip=False)
+
         self.accountant.step()
 
     def on_save(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
@@ -175,9 +183,19 @@ class OpacusDPTrainer(Trainer):
 
         self.privacy_params = privacy_params
 
-        # For Opacus 1.xx, we need to wrap the optimizer
+        # Opacus accountant since there is no more privacy engine
+        self.accountant = opacus.accountants.RDPAccountant()
+
+        # Sample-level DP is equivalent to mapping each sample to a unique author. 
+        if author_mapping is None:
+            author_mapping = [[i] for i in range(len(self.train_dataset))]
+        self.author_mapping = author_mapping
+
+    def create_optimizer(self):
+        _ = super().create_optimizer()
+
         if self.args.n_gpu > 1:
-            optimizer_generator = DifferentiallyPrivateDistributedDataParallel
+            optimizer_generator = opacus.optimizers.DistributedDPOptimizer
         else:
             optimizer_generator = opacus.optimizers.DPOptimizer
 
@@ -188,13 +206,7 @@ class OpacusDPTrainer(Trainer):
             expected_batch_size=self.privacy_params['expected_batch_size'],
         )
 
-        # Opacus accountant since there is no more privacy engine
-        self.accountant = opacus.accountants.RDPAccountant()
-
-        # Sample-level DP is equivalent to mapping each sample to a unique author. 
-        if author_mapping is None:
-            author_mapping = [[i] for i in range(len(self.train_dataset))]
-        self.author_mapping = author_mapping
+        return self.optimizer
 
     def training_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]) -> torch.Tensor:
         """
