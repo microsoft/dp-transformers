@@ -12,6 +12,7 @@ from transformers import (
     Trainer, TrainerCallback, TrainerState, TrainerControl, logging,
     DataCollatorForLanguageModeling, PreTrainedTokenizer, training_args
 )
+from transformers.tokenization_utils_base import BatchEncoding
 from transformers.file_utils import is_sagemaker_mp_enabled, is_datasets_available
 import opacus
 from dp_transformers import sampler
@@ -69,13 +70,13 @@ class DPCallback(TrainerCallback):
         self.accountant.step(noise_multiplier=self.privacy_params['noise_multiplier'], sample_rate=self.privacy_params['sampling_probability'])
 
     def on_save(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
-        return self._check_max_epsilon_exceeded(control)
+        return self._check_max_epsilon_exceeded(state, control)
 
     def on_evaluate(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
-        return self._check_max_epsilon_exceeded(control)
+        return self._check_max_epsilon_exceeded(state, control)
 
-    def _check_max_epsilon_exceeded(self, control: TrainerControl) -> TrainerControl:
-        eps = self.compute_epsilon(self.privacy_engine.steps)
+    def _check_max_epsilon_exceeded(self, state: TrainerState, control: TrainerControl) -> TrainerControl:
+        eps = self.compute_epsilon(state.global_step)
         if eps > self.max_epsilon:
             logger.error("Max epsilon exceeded. Stopping training...")
             control.should_training_stop = True
@@ -294,3 +295,9 @@ class OpacusDPTrainer(Trainer):
             num_workers=self.args.dataloader_num_workers,
             pin_memory=self.args.dataloader_pin_memory,
         )
+
+    def _prepare_inputs(self, inputs: Union[Dict, BatchEncoding]) -> Dict:
+        """Fixes an issue with recent versions of Pytorch, data is not moved to GPU otherwise"""
+        if isinstance(inputs, BatchEncoding):
+            inputs = inputs.data  # this is a proper dict
+        return super()._prepare_inputs(inputs)
