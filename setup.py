@@ -31,7 +31,7 @@ setup(
         "transformers>=4.10.0",
         "datasets<2.0.0",
         "opacus<1.0.0",
-        "prv-accountant",
+        "prv-accountant<0.2.0",
         "torch<1.10"
     ],
     test_suite="tests",
