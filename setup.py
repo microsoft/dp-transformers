@@ -28,7 +28,7 @@ setup(
         ]
     },
     install_requires=[
-        "transformers>=4.10.0",
+        "transformers>=4.20.1",
         "datasets<2.0.0",
         "opacus<1.0.0",
         "prv-accountant",
