@@ -12,6 +12,7 @@ import logging
 import prv_accountant
 
 from dataclasses import dataclass, field
+from transformers.training_args import ParallelMode
 from dp_transformers.layers.dp_merged_linear import mark_only_lora_as_trainable
 from dp_transformers.module_modification import convert_gpt2_attention_to_lora
 
@@ -125,7 +126,8 @@ def main(args: Arguments):
     else:
         dp_transformers.register_grad_sampler_gpt2()
 
-    if train_args.local_rank != -1:
+    if train_args.parallel_mode == ParallelMode.DISTRIBUTED:
+        logger.info(f"Wrapping the model with DPDDP in distributed training.")
         model = dp_transformers.dp_utils.DifferentiallyPrivateDistributedDataParallel(model)
 
     sampling_probability = train_args.per_device_train_batch_size*train_args.world_size*train_args.gradient_accumulation_steps/len(author_mapping)
