@@ -14,6 +14,7 @@ from transformers import (
 )
 from transformers.tokenization_utils_base import BatchEncoding
 from transformers.file_utils import is_sagemaker_mp_enabled, is_datasets_available
+from transformers.training_args import ParallelMode
 import opacus
 from dp_transformers import sampler
 from prv_accountant import Accountant
@@ -40,9 +41,6 @@ class DPCallback(TrainerCallback):
         else:
             self.compute_epsilon = compute_epsilon
 
-    def on_step_begin(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, optimizer=None, **kwargs): 
-        optimizer.zero_grad()  # Opacus is bothered that HF does not call .zero_grad() on the optimizer
-
     def on_substep_end(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, optimizer=None, **kwargs):
         if optimizer is None:
             raise RuntimeError("Impossible to access optimizer from inside callback")
@@ -51,6 +49,9 @@ class DPCallback(TrainerCallback):
         optimizer.zero_grad()
 
         self.on_substep_end_was_called = True
+
+    def on_step_begin(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, optimizer=None, **kwargs): 
+        optimizer.signal_skip_step(do_skip=False)
 
     def on_step_end(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, optimizer=None, **kwargs):
         if not (
@@ -65,7 +66,7 @@ class DPCallback(TrainerCallback):
 
         if optimizer is None:
             raise RuntimeError("Impossible to access optimizer from inside callback")
-        optimizer.signal_skip_step(do_skip=False)
+        optimizer.zero_grad()  # Opacus is bothered that HF does not call .zero_grad() on the optimizer
 
         self.accountant.step(noise_multiplier=self.privacy_params['noise_multiplier'], sample_rate=self.privacy_params['sampling_probability'])
 
@@ -102,7 +103,7 @@ class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeli
         return batch
 
 
-class DifferentiallyPrivateDistributedDataParallel(opacus.distributed.DifferentiallyPrivateDistributedDataParallel):
+class GradSampleModule(opacus.GradSampleModule):
     """
     Little wrapper to provide `no_sync` context which is assumed by Huggingface trainer.
     We don't need to do anything in addition here
@@ -199,7 +200,7 @@ class OpacusDPTrainer(Trainer):
     def create_optimizer(self):
         _ = super().create_optimizer()
 
-        if self.args.n_gpu > 1:
+        if self.args.parallel_mode == ParallelMode.DISTRIBUTED:
             optimizer_generator = opacus.optimizers.DistributedDPOptimizer
         else:
             optimizer_generator = opacus.optimizers.DPOptimizer

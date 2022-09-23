@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 
 from .conv_1d import register_grad_sampler as _register_grad_sampler_conv_1d
-from .tied_embedding import register_grad_sampler as _register_grad_sampler_tied_embedding
 
 
 def register_grad_sampler_gpt2() -> None:
@@ -13,4 +12,3 @@ def register_grad_sampler_gpt2() -> None:
     all necessary methods globally.
     """
     _register_grad_sampler_conv_1d()
-    _register_grad_sampler_tied_embedding()
