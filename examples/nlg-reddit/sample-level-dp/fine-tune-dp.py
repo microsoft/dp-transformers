@@ -13,6 +13,7 @@ import prv_accountant
 from transformers.training_args import ParallelMode
 
 from dataclasses import dataclass, field
+from transformers.training_args import ParallelMode
 from dp_transformers.layers.dp_merged_linear import mark_only_lora_as_trainable
 from dp_transformers.module_modification import convert_gpt2_attention_to_lora
 
@@ -112,6 +113,10 @@ def main(args: Arguments):
     else:
         dp_transformers.register_grad_sampler_gpt2()
 
+    if train_args.parallel_mode == ParallelMode.DISTRIBUTED:
+        logger.info(f"Wrapping the model with DPDDP in distributed training.")
+        model = dp_transformers.dp_utils.DifferentiallyPrivateDistributedDataParallel(model)
+
     sampling_probability = train_args.per_device_train_batch_size*train_args.world_size*train_args.gradient_accumulation_steps/len(dataset['train'])
     num_steps = int(train_args.num_train_epochs*(1/sampling_probability+1))
     if privacy_args.noise_multiplier is None: 
@@ -125,9 +130,6 @@ def main(args: Arguments):
         noise_multiplier = privacy_args.noise_multiplier
     if train_args.local_rank == 0:
         logger.info(f"The noise multiplier is set to be: {noise_multiplier}")
-
-    if train_args.parallel_mode == ParallelMode.DISTRIBUTED:
-        model = opacus.distributed.DifferentiallyPrivateDistributedDataParallel(model)
 
     # Wrap model so that per-sample gradients are computed
     model = dp_transformers.dp_utils.GradSampleModule(model)
