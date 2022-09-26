@@ -10,7 +10,7 @@ from torch import Tensor, nn
 from torch.utils.data import DataLoader
 from transformers import (
     Trainer, TrainerCallback, TrainerState, TrainerControl, logging,
-    DataCollatorForLanguageModeling, PreTrainedTokenizer, training_args
+    DataCollatorForLanguageModeling, DataCollatorForSeq2Seq, PreTrainedTokenizer, training_args
 )
 from transformers.file_utils import is_sagemaker_mp_enabled, is_datasets_available
 from opacus import PrivacyEngine, layers
@@ -89,6 +89,16 @@ class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeli
             batch["position_ids"] = torch.arange(
                 input_ids.shape[1], dtype=torch.long, device=input_ids.device
             ).repeat(input_ids.shape[0], 1)
+        return batch
+
+
+class DataCollatorForPrivateSeq2Seq(DataCollatorForSeq2Seq):
+    def __init__(self, tokenizer: PreTrainedTokenizer):
+        super().__init__(tokenizer=tokenizer)
+
+    def __call__(self, examples: List[Union[List[int], torch.Tensor, Dict[str, torch.Tensor]]]) -> Dict[str, torch.Tensor]:
+        batch = super().__call__(examples)
+
         return batch
 
 
@@ -206,7 +216,7 @@ class OpacusDPTrainer(Trainer):
         if is_sagemaker_mp_enabled():
             raise NotImplementedError("DP currently doesn't support this")
 
-        if self.use_amp:
+        if self.use_cpu_amp or self.use_cuda_amp:
             raise NotImplementedError("DP currently doesn't support this.")
         else:
             loss = self.compute_loss(model, inputs)
@@ -219,7 +229,7 @@ class OpacusDPTrainer(Trainer):
         # that is returned in order for the logging to work correctly. Hence we scale the loss after the call to 
         # loss.backward()
 
-        if self.use_amp:
+        if self.use_cpu_amp or self.use_cuda_amp:
             raise NotImplementedError("DP currently doesn't support this")
         elif self.use_apex:
             raise NotImplementedError("DP currently doesn't support this")
