@@ -10,6 +10,7 @@ from opacus.validators.errors import UnsupportedModuleError
 from dp_transformers.grad_sample.transformers import register_grad_sampler_gpt2
 
 
+@pytest.mark.xfail(reason='functorch can deal with module in Opacus 1.2')
 def test_gpt2_grad_sample_layers_registered():
     """
     Test whether all layers in GPT2 are registered in the grad sampler.
