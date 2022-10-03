@@ -19,6 +19,9 @@ class PrivacyArguments:
     target_epsilon: Optional[float] = field(default=None, metadata={
         "help": "Target epsilon at end of training (mutually exclusive with noise multiplier)"
     })
+    target_delta: Optional[float] = field(default=None, metadata={
+        "help": "Target delta, defaults to 1/N"
+    })
     disable_dp: bool = field(default=False, metadata={
         "help": "Disable DP training."
     })

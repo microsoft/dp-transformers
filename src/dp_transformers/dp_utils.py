@@ -10,17 +10,17 @@ from torch import nn
 from torch.utils.data import DataLoader
 from transformers import (
     Trainer, TrainerCallback, TrainerState, TrainerControl, logging,
-    DataCollatorForLanguageModeling, PreTrainedTokenizer, training_args
+    DataCollatorForLanguageModeling, PreTrainedTokenizer, training_args, modeling_utils
 )
 from transformers.tokenization_utils_base import BatchEncoding
 from transformers.file_utils import is_sagemaker_mp_enabled, is_datasets_available
-from transformers.training_args import ParallelMode
 import opacus
-from dp_transformers import sampler
 from prv_accountant import Accountant
 from scipy import optimize
 from contextlib import contextmanager
-from typing import Any, Callable, Tuple, List, Optional, Union, Dict, Sequence
+from typing import Any, Callable, List, Optional, Union, Dict, Sequence
+
+from . import sampler, arguments
 
 logger = logging.get_logger(__name__)
 
@@ -29,15 +29,24 @@ class DPCallback(TrainerCallback):
     """
     This class registers all the necessary callbacks to make transformers.Trainer compatible with opacus.
     """
-    def __init__(self, privacy_params: Dict, compute_epsilon: Optional[Callable[[int], float]] = None,
-                 max_epsilon: float = float('inf')) -> None:
-        self.privacy_params = privacy_params
+    def __init__(
+        self,
+        noise_multiplier: float,
+        target_delta: float,
+        sampling_probability: float,
+        compute_epsilon: Optional[Callable[[int], float]] = None,
+        max_epsilon: float = float('inf')
+    ) -> None:
+
+        self.noise_multiplier = noise_multiplier
+        self.target_delta = target_delta
+        self.sampling_probability = sampling_probability
         self.accountant = opacus.accountants.RDPAccountant()
 
         self.max_epsilon = max_epsilon
         self.on_substep_end_was_called = False
         if not compute_epsilon:
-            self.compute_epsilon = lambda _: self.accountant.get_epsilon(self.privacy_params['target_delta'])
+            self.compute_epsilon = lambda _: self.accountant.get_epsilon(self.target_delta)
         else:
             self.compute_epsilon = compute_epsilon
 
@@ -68,7 +77,7 @@ class DPCallback(TrainerCallback):
             raise RuntimeError("Impossible to access optimizer from inside callback")
         optimizer.zero_grad()  # Opacus is bothered that HF does not call .zero_grad() on the optimizer
 
-        self.accountant.step(noise_multiplier=self.privacy_params['noise_multiplier'], sample_rate=self.privacy_params['sampling_probability'])
+        self.accountant.step(noise_multiplier=self.noise_multiplier, sample_rate=self.sampling_probability)
 
     def on_save(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
         return self._check_max_epsilon_exceeded(state, control)
@@ -187,29 +196,99 @@ class OpacusDPTrainer(Trainer):
         of sample-level DP, each sample can be represented by a unique author.
         (iii) wrap the optimizer with Opacus' DPOptimizer/DistributedDPOptimizer
     """
-    def __init__(self, *args: Tuple, privacy_params: Dict, author_mapping: Optional[Sequence[Sequence[int]]]=None, **kwargs: Dict) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        model: Union[modeling_utils.PreTrainedModel, torch.nn.modules.module.Module] = None,
+        args: arguments.TrainingArguments = None,
+        train_dataset: Optional[torch.utils.data.dataset.Dataset] = None,
+        privacy_args: arguments.PrivacyArguments = None,
+        author_mapping: Optional[Sequence[Sequence[int]]] = None,
+        accountant_fn: callable = None,
+        use_prv_accountant: bool = True,
+        **kwargs: Dict
+    ) -> None:
 
-        self.privacy_params = privacy_params
+        self.privacy_args = privacy_args
+        self.noise_multiplier, target_delta, sampling_probability, num_steps = \
+            self._compute_privacy_params(args, privacy_args, len(train_dataset))
+
+        # Wrap model in DDP and GradSampleModule
+        if args.parallel_mode == training_args.ParallelMode.DISTRIBUTED:
+            logger.info(f"Wrapping the model with DPDDP in distributed training.")
+            model = opacus.distributed.DifferentiallyPrivateDistributedDataParallel(model)
+
+        model = GradSampleModule(model)
+
+        # Instantiate alternative accountant
+        if use_prv_accountant:
+            self.privacy_accountant = Accountant(
+                noise_multiplier=self.noise_multiplier,
+                sampling_probability=sampling_probability,
+                delta=target_delta,
+                eps_error=0.1,
+                max_compositions=num_steps
+            )
+            accountant_fn = lambda s: self.privacy_accountant.compute_epsilon(s)[2]
+        else:
+            accountant_fn = None
+
+        # Set up callback for accounting and handling grad acc
+        self.dp_callback = DPCallback(
+            noise_multiplier=self.noise_multiplier,
+            target_delta=target_delta,
+            sampling_probability=sampling_probability,
+            compute_epsilon=accountant_fn
+        )
+        super().__init__(model=model, args=args, train_dataset=train_dataset, callbacks=[self.dp_callback], **kwargs)
+
+        self.get_rdp_epsilon = lambda: self.dp_callback.accountant.get_epsilon(target_delta)  # RDP epsilon
+        self.get_accountant_epsilon = lambda: self.privacy_accountant.compute_epsilon(self.state.global_step)[2]
 
         # Sample-level DP is equivalent to mapping each sample to a unique author. 
         if author_mapping is None:
             author_mapping = [[i] for i in range(len(self.train_dataset))]
         self.author_mapping = author_mapping
 
+    @staticmethod
+    def _compute_privacy_params(train_args, privacy_args, train_size):
+        sampling_probability = train_args.per_device_train_batch_size*train_args.world_size*train_args.gradient_accumulation_steps/train_size
+        num_steps = int(train_args.num_train_epochs*(1/sampling_probability+1))
+
+        if privacy_args.target_delta is None:
+            target_delta = 1.0/train_size
+        else:
+            target_delta = privacy_args.target_delta
+        if train_args.local_rank == 0:
+            logger.info(f"The target delta is set to be: {target_delta}")
+
+        # Set up noise multiplier
+        if privacy_args.noise_multiplier is None: 
+            noise_multiplier = find_noise_multiplier(
+                sampling_probability=sampling_probability,
+                num_steps=num_steps,
+                target_delta=target_delta,
+                target_epsilon=privacy_args.target_epsilon
+            )
+        else:
+            noise_multiplier = privacy_args.noise_multiplier
+        if train_args.local_rank == 0:
+            logger.info(f"The noise multiplier is set to be: {noise_multiplier}")
+
+        return noise_multiplier, target_delta, sampling_probability, num_steps
+
     def create_optimizer(self):
         _ = super().create_optimizer()
 
-        if self.args.parallel_mode == ParallelMode.DISTRIBUTED:
+        if self.args.parallel_mode == training_args.ParallelMode.DISTRIBUTED:
             optimizer_generator = opacus.optimizers.DistributedDPOptimizer
         else:
             optimizer_generator = opacus.optimizers.DPOptimizer
 
         self.optimizer = optimizer_generator(
             optimizer=self.optimizer,
-            noise_multiplier=self.privacy_params['noise_multiplier'],
-            max_grad_norm=self.privacy_params['max_grad_norm'],
-            expected_batch_size=self.privacy_params['expected_batch_size'],
+            noise_multiplier=self.noise_multiplier,
+            max_grad_norm=self.privacy_args.per_sample_max_grad_norm,
+            expected_batch_size=self.args.per_device_train_batch_size * self.args.gradient_accumulation_steps,
         )
 
         return self.optimizer

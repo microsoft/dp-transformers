@@ -30,9 +30,9 @@ setup(
     install_requires=[
         "transformers>=4.10.0",
         "datasets<2.0.0",
-        "opacus==1.2.0",
+        "opacus>=1.2.0",
         "prv-accountant<0.2.0",
-        "torch==1.12.1"
+        "torch>=1.11,<1.12",
     ],
     test_suite="tests",
     zip_safe=False

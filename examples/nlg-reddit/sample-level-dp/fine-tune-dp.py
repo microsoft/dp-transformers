@@ -6,11 +6,8 @@
 import datasets
 import dp_transformers
 import transformers
-import opacus
 import sys
 import logging
-import prv_accountant
-from transformers.training_args import ParallelMode
 
 from dataclasses import dataclass, field
 from transformers.training_args import ParallelMode
@@ -113,66 +110,23 @@ def main(args: Arguments):
     else:
         dp_transformers.register_grad_sampler_gpt2()
 
-    if train_args.parallel_mode == ParallelMode.DISTRIBUTED:
-        logger.info(f"Wrapping the model with DPDDP in distributed training.")
-        model = dp_transformers.dp_utils.DifferentiallyPrivateDistributedDataParallel(model)
-
-    sampling_probability = train_args.per_device_train_batch_size*train_args.world_size*train_args.gradient_accumulation_steps/len(dataset['train'])
-    num_steps = int(train_args.num_train_epochs*(1/sampling_probability+1))
-    if privacy_args.noise_multiplier is None: 
-        noise_multiplier = dp_transformers.dp_utils.find_noise_multiplier(
-            sampling_probability=sampling_probability,
-            num_steps=num_steps,
-            target_delta=1.0/len(dataset['train']),
-            target_epsilon=privacy_args.target_epsilon
-        )
-    else:
-        noise_multiplier = privacy_args.noise_multiplier
-    if train_args.local_rank == 0:
-        logger.info(f"The noise multiplier is set to be: {noise_multiplier}")
-
-    # Wrap model so that per-sample gradients are computed
-    model = dp_transformers.dp_utils.GradSampleModule(model)
-
-    # Collect all DP-related params for passing to HF trainer
-    privacy_params = {
-        'noise_multiplier': noise_multiplier,
-        'max_grad_norm': privacy_args.per_sample_max_grad_norm,
-        'expected_batch_size': train_args.per_device_train_batch_size * train_args.gradient_accumulation_steps,
-        'target_delta': 1.0 / len(dataset['train']),
-        'sampling_probability': sampling_probability,
-    }
-
-    # A more accurate accountant than the ones provided by Opacus
-    privacy_accountant = prv_accountant.Accountant(
-        noise_multiplier=noise_multiplier,
-        sampling_probability=sampling_probability,
-        delta=privacy_params['target_delta'],
-        eps_error=0.1,
-        max_compositions=num_steps
-    )
-
     data_collator = dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer)
 
-    dp_callback = dp_transformers.DPCallback(
-        privacy_params,
-        lambda s: privacy_accountant.compute_epsilon(s)[2]
-    )
     trainer = dp_transformers.dp_utils.OpacusDPTrainer(
         args=train_args,
-        privacy_params=privacy_params,
         model=model,
         train_dataset=dataset['train'],
         eval_dataset=dataset['test'],
-        callbacks=[dp_callback],
-        data_collator=data_collator
+        data_collator=data_collator,
+        privacy_args=privacy_args,
+        use_prv_accountant=True,
     )
 
     try:
         trainer.train()
     finally:
-        eps_prv = privacy_accountant.compute_epsilon(trainer.state.global_step)[2]
-        eps_rdp = dp_callback.accountant.get_epsilon(privacy_params['target_delta'])
+        eps_prv = trainer.get_accountant_epsilon()
+        eps_rdp = trainer.get_rdp_epsilon()
         trainer.log({
             "final_epsilon_prv": eps_prv,
             "final_epsilon_rdp": eps_rdp
