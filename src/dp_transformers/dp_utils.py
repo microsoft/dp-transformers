@@ -209,8 +209,14 @@ class OpacusDPTrainer(Trainer):
     ) -> None:
 
         self.privacy_args = privacy_args
+
+        # Sample-level DP is equivalent to mapping each sample to a unique author. 
+        if author_mapping is None:
+            author_mapping = [[i] for i in range(train_dataset)]
+        self.author_mapping = author_mapping
+
         self.noise_multiplier, target_delta, sampling_probability, num_steps = \
-            self._compute_privacy_params(args, privacy_args, len(train_dataset))
+            self._compute_privacy_params(args, privacy_args, len(author_mapping))
 
         # Wrap model in DDP and GradSampleModule
         if args.parallel_mode == training_args.ParallelMode.DISTRIBUTED:
@@ -244,10 +250,6 @@ class OpacusDPTrainer(Trainer):
         self.get_rdp_epsilon = lambda: self.dp_callback.accountant.get_epsilon(target_delta)  # RDP epsilon
         self.get_accountant_epsilon = lambda: self.privacy_accountant.compute_epsilon(self.state.global_step)[2]
 
-        # Sample-level DP is equivalent to mapping each sample to a unique author. 
-        if author_mapping is None:
-            author_mapping = [[i] for i in range(len(self.train_dataset))]
-        self.author_mapping = author_mapping
 
     @staticmethod
     def _compute_privacy_params(train_args, privacy_args, train_size):
