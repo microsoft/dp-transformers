@@ -95,7 +95,7 @@ dependencies:
     - secretstorage==3.3.1
     - tokenizers==0.10.3
     - tqdm==4.62.3
-    - transformers>=4.20.1
+    - transformers==4.20.1
     - typing_extensions==4.0.1
     - urllib3==1.26.7
     - xxhash==2.0.2
