@@ -212,7 +212,7 @@ class OpacusDPTrainer(Trainer):
 
         # Sample-level DP is equivalent to mapping each sample to a unique author. 
         if author_mapping is None:
-            author_mapping = [[i] for i in range(train_dataset)]
+            author_mapping = [[i] for i in range(len(train_dataset))]
         self.author_mapping = author_mapping
 
         self.noise_multiplier, target_delta, sampling_probability, num_steps = \
