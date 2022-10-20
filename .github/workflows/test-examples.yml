@@ -24,6 +24,7 @@ jobs:
         environment-file: ${{ matrix.example }}/environment.yml
     - name: Check installed packages
       run: |
+        conda env list
         which pip
         pip freeze 
     - name: Install package
