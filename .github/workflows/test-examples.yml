@@ -29,11 +29,11 @@ jobs:
     - name: Check packages
       run: |
         conda activate env && which pip
-        conda activate env && pip freeze 
+        /usr/share/miniconda/envs/env/bin/pip freeze 
     - name: Install package
       run: |
-        conda activate env && pip install -e .
+        /usr/share/miniconda/envs/env/bin/pip install -e .
     - name: Check environment
       run: |
-        conda activate env && python -c "import torch"
-        conda activate env && python -c "import dp-transformers"
+        /usr/share/miniconda/envs/env/bin/python -c "import torch"
+        /usr/share/miniconda/envs/env/bin/python -c "import dp-transformers"
