@@ -23,13 +23,6 @@ jobs:
         activate-environment: env
         environment-file: ${{ matrix.example }}/environment.yml
         auto-activate-base: false
-    - name: Check packages
-      run: |
-        /usr/share/miniconda/envs/env/bin/pip freeze 
     - name: Install package
       run: |
         /usr/share/miniconda/envs/env/bin/pip install -e .
-    - name: Check environment
-      run: |
-        /usr/share/miniconda/envs/env/bin/python -c \"import torch\"
-        /usr/share/miniconda/envs/env/bin/python -c \"import dp-transformers\"
