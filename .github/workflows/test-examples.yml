@@ -7,8 +7,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
-
+  run:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -17,9 +16,16 @@ jobs:
           "examples/nlg-reddit/sample-level-dp",
           "examples/nlg-reddit/author-level-dp"
         ]
-
     steps:
     - uses: actions/checkout@v3
-    - name: Install environment
+    - uses: conda-incubator/setup-miniconda@v2
+      with:
+        activate-environment: anaconda-client-env
+        environment-file: ${{ matrix.example }}/environment.yml
+        auto-activate-base: true
+    - name: Check installed packages
       run: |
-        make ${{ matrix.example }}/env
+        pip freeze 
+    - name: Install package
+      run: |
+        pip install -e .
