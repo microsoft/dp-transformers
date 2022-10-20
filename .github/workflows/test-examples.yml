@@ -22,17 +22,13 @@ jobs:
       with:
         activate-environment: env
         environment-file: ${{ matrix.example }}/environment.yml
-    - name: Check installed packages
-      uses: conda-incubator/setup-miniconda@v2
-      with:
-        activate-environment: env
+        auto-activate-base: false
+    - name: Check conda environments
       run: |
         conda env list
+    - name: Check packages 
         which pip
         pip freeze 
     - name: Install package
-      uses: conda-incubator/setup-miniconda@v2
-      with:
-        activate-environment: env
       run: |
         pip install -e .
