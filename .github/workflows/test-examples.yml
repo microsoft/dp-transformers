@@ -20,13 +20,19 @@ jobs:
     - uses: actions/checkout@v3
     - uses: conda-incubator/setup-miniconda@v2
       with:
-        activate-environment: anaconda-client-env
+        activate-environment: env
         environment-file: ${{ matrix.example }}/environment.yml
     - name: Check installed packages
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        activate-environment: env
       run: |
         conda env list
         which pip
         pip freeze 
     - name: Install package
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        activate-environment: env
       run: |
         pip install -e .
