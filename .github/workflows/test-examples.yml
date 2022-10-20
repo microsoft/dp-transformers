@@ -22,9 +22,9 @@ jobs:
       with:
         activate-environment: anaconda-client-env
         environment-file: ${{ matrix.example }}/environment.yml
-        auto-activate-base: true
     - name: Check installed packages
       run: |
+        which pip
         pip freeze 
     - name: Install package
       run: |
