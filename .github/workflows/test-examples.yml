@@ -28,8 +28,12 @@ jobs:
         conda env list
     - name: Check packages
       run: |
-        which pip
-        pip freeze 
+        conda activate env && which pip
+        conda activate env && pip freeze 
     - name: Install package
       run: |
-        pip install -e .
+        conda activate env && pip install -e .
+    - name: Check environment
+      run: |
+        conda activate env && python -c "import torch"
+        conda activate env && python -c "import dp-transformers"
