@@ -1,0 +1,25 @@
+name: Test examples
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example: [
+          "examples/nlg-reddit/sample-level-dp",
+          "examples/nlg-reddit/author-level-dp"
+        ]
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install environment
+      run: |
+        make ${{ matrix.example }}/env
