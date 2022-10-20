@@ -26,7 +26,8 @@ jobs:
     - name: Check conda environments
       run: |
         conda env list
-    - name: Check packages 
+    - name: Check packages
+      run: |
         which pip
         pip freeze 
     - name: Install package
