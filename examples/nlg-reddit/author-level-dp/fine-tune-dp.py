@@ -122,17 +122,17 @@ def main(args: Arguments):
     model.train()
 
     if args.model.lora_dim > 0:
-        dp_transformers.register_grad_sampler_gpt2_lora()
+        from dp_transformers.grad_sample.lora import lora_layer
     else:
-        dp_transformers.register_grad_sampler_gpt2()
+        from dp_transformers.grad_sample.transformers import conv_1d
 
     data_collator = dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer)
 
     trainer = dp_transformers.dp_utils.OpacusDPTrainer(
         args=train_args,
         model=model,
-        train_dataset=dataset['train'],
-        eval_dataset=dataset['test'],
+        train_dataset=train_dataset,
+        eval_dataset=test_dataset,
         data_collator=data_collator,
         author_mapping=author_mapping,
         privacy_args=privacy_args,

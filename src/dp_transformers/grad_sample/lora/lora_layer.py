@@ -5,11 +5,11 @@ from typing import Dict
 
 import torch
 import torch.nn as nn
-from opacus.grad_sample import utils
+from opacus.grad_sample.utils import register_grad_sampler
 
 from dp_transformers.layers.dp_merged_linear import Conv1DZeroInit
 
-
+@register_grad_sampler(Conv1DZeroInit)
 def compute_lora_conv_1d_zero_init_grad_sample(
     layer: Conv1DZeroInit, A: torch.Tensor, B: torch.Tensor) -> Dict[nn.Parameter, torch.Tensor]:
 
@@ -34,6 +34,3 @@ def compute_lora_conv_1d_zero_init_grad_sample(
         raise Exception("groups can only be 1, 2, or 3 in LoRA")
     
     return ret
-
-def register_grad_sampler() -> None:
-    utils.register_grad_sampler(Conv1DZeroInit)(compute_lora_conv_1d_zero_init_grad_sample)
