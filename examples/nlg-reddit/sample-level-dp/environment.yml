@@ -46,14 +46,12 @@ dependencies:
   - pillow=8.3.1
   - pip=21.0.1
   - python=3.8.11
-  - pytorch=1.9.1
+  - pytorch=1.12.1
   - readline=8.1
   - setuptools=58.0.4
   - six=1.16.0
   - sqlite=3.36.0
   - tk=8.6.10
-  - torchaudio=0.9.1
-  - torchvision=0.10.1
   - wheel=0.37.0
   - xz=5.2.5
   - zlib=1.2.11
@@ -81,7 +79,7 @@ dependencies:
     - multidict==5.1.0
     - multiprocess==0.70.12.2
     - numpy==1.21.2
-    - opacus==0.15.0
+    - opacus==1.2.0
     - pandas==1.3.3
     - pyarrow==5.0.0
     - pycparser==2.20

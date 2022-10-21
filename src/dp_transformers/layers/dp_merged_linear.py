@@ -95,7 +95,7 @@ class DPMergedLinear(nn.Module):
             fan_in_fan_out = fan_in_fan_out, merge_weights = merge_weights, **kwargs
         )
         assert lora_layer.linear.weight.shape == original_layer.weight.T.shape
-        lora_layer.linear.weight = torch.nn.parameter.Parameter(original_layer.weight.T)
+        lora_layer.linear.weight = torch.nn.parameter.Parameter(original_layer.weight.T.contiguous())
         lora_layer.linear.bias = original_layer.bias
         return lora_layer
 
