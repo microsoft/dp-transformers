@@ -8,7 +8,7 @@ from opacus.tests.grad_samples.common import GradSampleHooks_test
 
 from dp_transformers.layers.dp_merged_linear import Conv1DZeroInit, DPMergedLinear
 
-from dp_transformers.grad_sample.lora.lora_layer import register_grad_sampler
+from dp_transformers.grad_sample.lora import lora_layer
 
 from typing import List
 
@@ -24,8 +24,6 @@ class TestLoRA:
         Verify that our custom implementation of the grad sample for Conv1DZeroInit
         layer works. We largely build on the test routines in opacus's library.
         """
-        register_grad_sampler()
-
         x = torch.randn(batch_size, r * sum(enable_lora), seq_len)
         
         in_features, out_features, groups = r, out_features // len(enable_lora) * sum(enable_lora), sum(enable_lora)
@@ -51,7 +49,6 @@ class TestLoRA:
         Verify that our custom implementation of the grad sample for DPMergedLinear
         layer works. We largely build on the test routines in opacus's library.
         """
-        register_grad_sampler()
         lora_dropout = 0.0
 
         in_features, out_features = 1024, 3072
