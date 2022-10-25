@@ -12,7 +12,6 @@ from transformers import (
     Trainer, TrainerCallback, TrainerState, TrainerControl, logging,
     DataCollatorForLanguageModeling, PreTrainedTokenizer, training_args, modeling_utils
 )
-from transformers.tokenization_utils_base import BatchEncoding
 from transformers.file_utils import is_sagemaker_mp_enabled, is_datasets_available
 import opacus
 from prv_accountant import Accountant
@@ -208,6 +207,7 @@ class OpacusDPTrainer(Trainer):
         **kwargs: Dict
     ) -> None:
 
+        self.train_args = args
         self.privacy_args = privacy_args
 
         # Sample-level DP is equivalent to mapping each sample to a unique author. 
@@ -215,8 +215,12 @@ class OpacusDPTrainer(Trainer):
             author_mapping = [[i] for i in range(len(train_dataset))]
         self.author_mapping = author_mapping
 
-        self.noise_multiplier, target_delta, sampling_probability, num_steps = \
-            self._compute_privacy_params(args, privacy_args, len(author_mapping))
+        if not self.privacy_args.is_initialized:
+            self.privacy_args.initialize(
+                sampling_probability=self.sampling_probability,
+                num_steps=self.num_steps,
+                num_samples=len(self.author_mapping),
+            )
 
         # Wrap model in DDP and GradSampleModule
         if args.parallel_mode == training_args.ParallelMode.DISTRIBUTED:
@@ -229,10 +233,10 @@ class OpacusDPTrainer(Trainer):
         if use_prv_accountant:
             self.privacy_accountant = Accountant(
                 noise_multiplier=self.noise_multiplier,
-                sampling_probability=sampling_probability,
-                delta=target_delta,
+                sampling_probability=self.sampling_probability,
+                delta=self.privacy_params.target_delta,
                 eps_error=0.1,
-                max_compositions=num_steps
+                max_compositions=self.num_steps
             )
             accountant_fn = lambda s: self.privacy_accountant.compute_epsilon(s)[2]
         else:
@@ -241,42 +245,23 @@ class OpacusDPTrainer(Trainer):
         # Set up callback for accounting and handling grad acc
         self.dp_callback = DPCallback(
             noise_multiplier=self.noise_multiplier,
-            target_delta=target_delta,
-            sampling_probability=sampling_probability,
+            target_delta=self.privacy_params.target_delta,
+            sampling_probability=self.sampling_probability,
             compute_epsilon=accountant_fn
         )
         super().__init__(model=model, args=args, train_dataset=train_dataset, callbacks=[self.dp_callback], **kwargs)
 
-        self.get_rdp_epsilon = lambda: self.dp_callback.accountant.get_epsilon(target_delta)  # RDP epsilon
+        self.get_rdp_epsilon = lambda: self.dp_callback.accountant.get_epsilon(self.privacy_params.target_delta)  # RDP epsilon
         self.get_accountant_epsilon = lambda: self.privacy_accountant.compute_epsilon(self.state.global_step)[2]
 
+    @property
+    def sampling_probability(self) -> float:
+        return self.train_args.per_device_train_batch_size * self.train_args.world_size * \
+            self.train_args.gradient_accumulation_steps / len(self.author_mapping)
 
-    @staticmethod
-    def _compute_privacy_params(train_args, privacy_args, train_size):
-        sampling_probability = train_args.per_device_train_batch_size*train_args.world_size*train_args.gradient_accumulation_steps/train_size
-        num_steps = int(train_args.num_train_epochs*(1/sampling_probability+1))
-
-        if privacy_args.target_delta is None:
-            target_delta = 1.0/train_size
-        else:
-            target_delta = privacy_args.target_delta
-        if train_args.local_rank == 0:
-            logger.info(f"The target delta is set to be: {target_delta}")
-
-        # Set up noise multiplier
-        if privacy_args.noise_multiplier is None: 
-            noise_multiplier = find_noise_multiplier(
-                sampling_probability=sampling_probability,
-                num_steps=num_steps,
-                target_delta=target_delta,
-                target_epsilon=privacy_args.target_epsilon
-            )
-        else:
-            noise_multiplier = privacy_args.noise_multiplier
-        if train_args.local_rank == 0:
-            logger.info(f"The noise multiplier is set to be: {noise_multiplier}")
-
-        return noise_multiplier, target_delta, sampling_probability, num_steps
+    @property
+    def num_steps(self) -> int:
+        return int(self.train_args.num_train_epochs * (1 / self.sampling_probability + 1))
 
     def create_optimizer(self):
         _ = super().create_optimizer()
@@ -378,9 +363,3 @@ class OpacusDPTrainer(Trainer):
             num_workers=self.args.dataloader_num_workers,
             pin_memory=self.args.dataloader_pin_memory,
         )
-
-    def _prepare_inputs(self, inputs: Union[Dict, BatchEncoding]) -> Dict:
-        """Fixes an issue with recent versions of Pytorch, data is not moved to GPU otherwise"""
-        if isinstance(inputs, BatchEncoding):
-            inputs = inputs.data  # this is a proper dict
-        return super()._prepare_inputs(inputs)
