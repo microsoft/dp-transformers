@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 
 import pandas as pd
-import numpy as np
 import datasets
 from datasets import Dataset
 import torch
@@ -15,7 +14,6 @@ from transformers import (
 from transformers.file_utils import is_sagemaker_mp_enabled, is_datasets_available
 import opacus
 from prv_accountant import Accountant
-from scipy import optimize
 from contextlib import contextmanager
 from typing import Any, Callable, List, Optional, Union, Dict, Sequence
 
@@ -121,61 +119,6 @@ class GradSampleModule(opacus.GradSampleModule):
         yield
 
 
-def find_noise_multiplier(sampling_probability: float, num_steps: int, target_epsilon: float, target_delta: float,
-                          eps_error: float=0.1) -> float:
-    """
-    Find a noise multiplier that satisfies a given target epsilon.
-
-    :param float sampling_probability: Probability of a record being in batch for Poisson sampling
-    :param int num_steps: Number of optimisation steps
-    :param float target_epsilon: Desired target epsilon
-    :param float target_delta: Value of DP delta
-    :param float eps_error: Error allowed for final epsilon
-    """
-    def compute_epsilon(mu: float) -> float:
-        acc = Accountant(
-            noise_multiplier=mu,
-            sampling_probability=sampling_probability,
-            delta=target_delta,
-            max_compositions=num_steps,
-            eps_error=eps_error/2
-        )
-        return acc.compute_epsilon(num_steps)
-
-    mu_max = 100.0
-
-    mu_R = 1.0
-    eps_R = float('inf')
-    while eps_R > target_epsilon:
-        mu_R *= np.sqrt(2)
-        try:
-            eps_R = compute_epsilon(mu_R)[2]
-        except (OverflowError, RuntimeError):
-            pass
-        if mu_R > mu_max:
-            raise RuntimeError("Finding a suitable noise multiplier has not converged. "
-                               "Try increasing target epsilon or decreasing sampling probability.")
-
-    mu_L = mu_R
-    eps_L = eps_R
-    while eps_L < target_epsilon:
-        mu_L /= np.sqrt(2)
-        eps_L = compute_epsilon(mu_L)[0]
-
-
-    has_converged = False 
-    bracket = [mu_L, mu_R]
-    while not has_converged:
-        mu_err = (bracket[1]-bracket[0])*0.01
-        mu_guess = optimize.root_scalar(lambda mu: compute_epsilon(mu)[2]-target_epsilon, bracket=bracket, xtol=mu_err).root
-        bracket = [mu_guess-mu_err, mu_guess+mu_err]
-        eps_up = compute_epsilon(mu_guess-mu_err)[2]
-        eps_low = compute_epsilon(mu_guess+mu_err)[0]
-        has_converged = (eps_up - eps_low) < 2*eps_error
-    assert compute_epsilon(bracket[1])[2] < target_epsilon + eps_error
-    return bracket[1]
-
-
 def create_author_mapping(dataset: Dataset, author: str) -> Sequence[Sequence[int]]:
     """
     Creates a mapping from authors to samples in a dataset.
@@ -232,9 +175,9 @@ class OpacusDPTrainer(Trainer):
         # Instantiate alternative accountant
         if use_prv_accountant:
             self.privacy_accountant = Accountant(
-                noise_multiplier=self.noise_multiplier,
+                noise_multiplier=self.privacy_args.noise_multiplier,
                 sampling_probability=self.sampling_probability,
-                delta=self.privacy_params.target_delta,
+                delta=self.privacy_args.target_delta,
                 eps_error=0.1,
                 max_compositions=self.num_steps
             )
@@ -244,14 +187,14 @@ class OpacusDPTrainer(Trainer):
 
         # Set up callback for accounting and handling grad acc
         self.dp_callback = DPCallback(
-            noise_multiplier=self.noise_multiplier,
-            target_delta=self.privacy_params.target_delta,
+            noise_multiplier=self.privacy_args.noise_multiplier,
+            target_delta=self.privacy_args.target_delta,
             sampling_probability=self.sampling_probability,
             compute_epsilon=accountant_fn
         )
         super().__init__(model=model, args=args, train_dataset=train_dataset, callbacks=[self.dp_callback], **kwargs)
 
-        self.get_rdp_epsilon = lambda: self.dp_callback.accountant.get_epsilon(self.privacy_params.target_delta)  # RDP epsilon
+        self.get_rdp_epsilon = lambda: self.dp_callback.accountant.get_epsilon(self.privacy_args.target_delta)  # RDP epsilon
         self.get_accountant_epsilon = lambda: self.privacy_accountant.compute_epsilon(self.state.global_step)[2]
 
     @property
@@ -273,7 +216,7 @@ class OpacusDPTrainer(Trainer):
 
         self.optimizer = optimizer_generator(
             optimizer=self.optimizer,
-            noise_multiplier=self.noise_multiplier,
+            noise_multiplier=self.privacy_args.noise_multiplier,
             max_grad_norm=self.privacy_args.per_sample_max_grad_norm,
             expected_batch_size=self.args.per_device_train_batch_size * self.args.gradient_accumulation_steps,
         )
