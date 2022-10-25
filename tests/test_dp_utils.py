@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-from dp_transformers.dp_utils import find_noise_multiplier
+from dp_transformers.arguments import find_noise_multiplier
 from prv_accountant import Accountant
 import pytest
 
