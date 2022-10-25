@@ -1,0 +1,28 @@
+name: Test examples
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example: [
+          "examples/nlg-reddit/sample-level-dp",
+          "examples/nlg-reddit/author-level-dp"
+        ]
+    steps:
+    - uses: actions/checkout@v3
+    - uses: conda-incubator/setup-miniconda@v2
+      with:
+        activate-environment: env
+        environment-file: ${{ matrix.example }}/environment.yml
+        auto-activate-base: false
+    - name: Install package
+      run: |
+        /usr/share/miniconda/envs/env/bin/pip install -e .
