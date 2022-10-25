@@ -8,7 +8,7 @@ from transformers import IntervalStrategy, logging
 from dataclasses import dataclass, field
 from datasets.utils import disable_progress_bar
 
-from dp_utils import find_noise_multiplier
+from .dp_utils import find_noise_multiplier
 
 logger = logging.get_logger(__name__)
 
