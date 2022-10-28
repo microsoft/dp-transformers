@@ -17,7 +17,7 @@ from prv_accountant import Accountant
 from contextlib import contextmanager
 from typing import Any, Callable, List, Optional, Union, Dict, Sequence
 
-from . import sampler, arguments
+from dp_transformers import sampler, arguments
 
 logger = logging.get_logger(__name__)
 
