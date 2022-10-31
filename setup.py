@@ -32,7 +32,7 @@ setup(
         "datasets>=2.0.0",
         "opacus>=1.2.0",
         "prv-accountant<0.2.0",
-        "torch>=1.12.1",
+        "torch>=1.9.1,<=1.12.1",
     ],
     test_suite="tests",
     zip_safe=False
