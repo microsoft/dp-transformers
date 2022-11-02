@@ -124,7 +124,7 @@ def main(args: Arguments):
     try:
         trainer.train()
     finally:
-        eps_prv = trainer.get_accountant_epsilon()
+        eps_prv = trainer.get_prv_epsilon()
         eps_rdp = trainer.get_rdp_epsilon()
         trainer.log({
             "final_epsilon_prv": eps_prv,

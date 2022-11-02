@@ -193,7 +193,7 @@ class OpacusDPTrainer(Trainer):
         super().__init__(model=model, args=args, train_dataset=train_dataset, callbacks=[self.dp_callback], **kwargs)
 
         self.get_rdp_epsilon = lambda: self.rdp_accountant.get_epsilon(self.privacy_args.target_delta)  # RDP epsilon
-        self.get_accountant_epsilon = lambda: self.prv_accountant.compute_epsilon(self.state.global_step)[2]
+        self.get_prv_epsilon = lambda: self.prv_accountant.compute_epsilon(self.state.global_step)[2]
 
     @property
     def sampling_probability(self) -> float:
