@@ -136,7 +136,6 @@ def main(args: Arguments):
         data_collator=data_collator,
         author_mapping=author_mapping,
         privacy_args=privacy_args,
-        use_prv_accountant=True,
     )
 
     try:

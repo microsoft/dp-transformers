@@ -119,7 +119,6 @@ def main(args: Arguments):
         eval_dataset=dataset['test'],
         data_collator=data_collator,
         privacy_args=privacy_args,
-        use_prv_accountant=True,
     )
 
     try:

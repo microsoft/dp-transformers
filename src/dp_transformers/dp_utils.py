@@ -13,7 +13,8 @@ from transformers import (
 )
 from transformers.file_utils import is_sagemaker_mp_enabled, is_datasets_available
 import opacus
-from prv_accountant import Accountant
+from opacus.accountants import RDPAccountant
+from prv_accountant import Accountant as PRVAccountant
 from contextlib import contextmanager
 from typing import Any, Callable, List, Optional, Union, Dict, Sequence
 
@@ -31,21 +32,21 @@ class DPCallback(TrainerCallback):
         noise_multiplier: float,
         target_delta: float,
         sampling_probability: float,
-        compute_epsilon: Optional[Callable[[int], float]] = None,
+        rdp_accountant: RDPAccountant,
+        prv_accountant: PRVAccountant,
         max_epsilon: float = float('inf')
     ) -> None:
 
         self.noise_multiplier = noise_multiplier
         self.target_delta = target_delta
         self.sampling_probability = sampling_probability
-        self.accountant = opacus.accountants.RDPAccountant()
+        self.rdp_accountant = rdp_accountant
+        self.prv_accountant = prv_accountant
 
         self.max_epsilon = max_epsilon
         self.on_substep_end_was_called = False
-        if not compute_epsilon:
-            self.compute_epsilon = lambda _: self.accountant.get_epsilon(self.target_delta)
-        else:
-            self.compute_epsilon = compute_epsilon
+        self.compute_rdp_epsilon = lambda: self.rdp_accountant.get_epsilon(self.target_delta)
+        self.compute_prv_epsilon = lambda s: self.prv_accountant.compute_epsilon(s)[2]
 
     def on_substep_end(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, optimizer=None, **kwargs):
         if optimizer is None:
@@ -74,7 +75,7 @@ class DPCallback(TrainerCallback):
             raise RuntimeError("Impossible to access optimizer from inside callback")
         optimizer.zero_grad()  # Opacus is bothered that HF does not call .zero_grad() on the optimizer
 
-        self.accountant.step(noise_multiplier=self.noise_multiplier, sample_rate=self.sampling_probability)
+        self.rdp_accountant.step(noise_multiplier=self.noise_multiplier, sample_rate=self.sampling_probability)
 
     def on_save(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
         return self._check_max_epsilon_exceeded(state, control)
@@ -83,8 +84,9 @@ class DPCallback(TrainerCallback):
         return self._check_max_epsilon_exceeded(state, control)
 
     def _check_max_epsilon_exceeded(self, state: TrainerState, control: TrainerControl) -> TrainerControl:
-        eps = self.compute_epsilon(state.global_step)
-        if eps > self.max_epsilon:
+        eps_rdp = self.compute_rdp_epsilon()
+        eps_prv = self.compute_prv_epsilon(state.global_step)
+        if eps_rdp > self.max_epsilon or eps_prv > self.max_epsilon:
             logger.error("Max epsilon exceeded. Stopping training...")
             control.should_training_stop = True
         return control
@@ -145,8 +147,6 @@ class OpacusDPTrainer(Trainer):
         train_dataset: Optional[torch.utils.data.dataset.Dataset] = None,
         privacy_args: arguments.PrivacyArguments = None,
         author_mapping: Optional[Sequence[Sequence[int]]] = None,
-        accountant_fn: callable = None,
-        use_prv_accountant: bool = True,
         **kwargs: Dict
     ) -> None:
 
@@ -172,30 +172,28 @@ class OpacusDPTrainer(Trainer):
 
         model = GradSampleModule(model)
 
-        # Instantiate alternative accountant
-        if use_prv_accountant:
-            self.privacy_accountant = Accountant(
-                noise_multiplier=self.privacy_args.noise_multiplier,
-                sampling_probability=self.sampling_probability,
-                delta=self.privacy_args.target_delta,
-                eps_error=0.1,
-                max_compositions=self.num_steps
-            )
-            accountant_fn = lambda s: self.privacy_accountant.compute_epsilon(s)[2]
-        else:
-            accountant_fn = None
+        # Instantiate privacy accountants
+        self.rdp_accountant = RDPAccountant()
+        self.prv_accountant = PRVAccountant(
+            noise_multiplier=self.privacy_args.noise_multiplier,
+            sampling_probability=self.sampling_probability,
+            delta=self.privacy_args.target_delta,
+            eps_error=0.1,
+            max_compositions=self.num_steps
+        )
 
         # Set up callback for accounting and handling grad acc
         self.dp_callback = DPCallback(
             noise_multiplier=self.privacy_args.noise_multiplier,
             target_delta=self.privacy_args.target_delta,
             sampling_probability=self.sampling_probability,
-            compute_epsilon=accountant_fn
+            rdp_accountant=self.rdp_accountant,
+            prv_accountant=self.prv_accountant
         )
         super().__init__(model=model, args=args, train_dataset=train_dataset, callbacks=[self.dp_callback], **kwargs)
 
-        self.get_rdp_epsilon = lambda: self.dp_callback.accountant.get_epsilon(self.privacy_args.target_delta)  # RDP epsilon
-        self.get_accountant_epsilon = lambda: self.privacy_accountant.compute_epsilon(self.state.global_step)[2]
+        self.get_rdp_epsilon = lambda: self.rdp_accountant.get_epsilon(self.privacy_args.target_delta)  # RDP epsilon
+        self.get_accountant_epsilon = lambda: self.prv_accountant.compute_epsilon(self.state.global_step)[2]
 
     @property
     def sampling_probability(self) -> float:
