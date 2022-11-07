@@ -91,7 +91,7 @@ This causes problems with Opacus though since it is not sure how to apply the ba
 In this repo we provide an implementation for handling this type of layer.
 See `dp_transformers.grad_sample.transformers.conv_1d`
 
-All necessary grad samplers can be registered by calling `dp_transformers.register_grad_sampler_gpt2()` before the model training.
+All necessary grad samplers can be registered by merely importing `conv_1d` before the model training.
 See the Known Issues section below for more details.
 
 ## General tips for DP training
@@ -122,10 +122,10 @@ Make sure to use a better PRNG before deploying models.
 
 ### Register custom grad samplers late in the training process
 
-When registering custom grad sampler like `dp_transformers.register_grad_sampler_gpt2()`, functions are added to a global dictionary that Opacus handles.
+When registering custom grad sampler like `dp_transformers.grad_sample.transformers.conv_1d`, functions are added to a global dictionary that Opacus handles.
 This global dictionary is used to establish whether models are compatible with Opacus and how to handle the per-sample gradient computation.
 All grad samplers need to be registered as early as possible in the training process.
-Definitely, before a `PrivacyEngine` is instantiated.
+Definitely, before the model is wrapped with `GradSampleModule`.
 
 ## How to Cite
 

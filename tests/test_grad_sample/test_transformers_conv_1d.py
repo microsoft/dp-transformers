@@ -7,7 +7,7 @@ from opacus.tests.grad_samples.common import GradSampleHooks_test
 
 from transformers.modeling_utils import Conv1D
 
-from dp_transformers.grad_sample.transformers.conv_1d import register_grad_sampler
+from dp_transformers.grad_sample.transformers import conv_1d
 
 
 class TestConv1D(GradSampleHooks_test):
@@ -16,7 +16,6 @@ class TestConv1D(GradSampleHooks_test):
         Verify that our custom implementation of the grad sample for huggingface's Conv1D
         layer works. We largely build on the test routines in opacus's library.
         """
-        register_grad_sampler()
         x = torch.randn(16, 8)
         layer = Conv1D(4, 8)
         self.run_test(x, layer, batch_first=True)

@@ -4,7 +4,7 @@
 import os
 from setuptools import setup, find_packages
 
-version = '0.1.0'
+version = '1.0.0'
 
 with open('README.md') as f:
     long_description = f.read()
@@ -19,7 +19,7 @@ setup(
     author='Microsoft',
     packages=find_packages('src'),
     package_dir={'': 'src'},
-    python_requires=">=3.7.0,<3.10.0",
+    python_requires=">=3.7.0",
     include_package_data=True,
     extras_require={
         "test": [
@@ -30,9 +30,9 @@ setup(
     install_requires=[
         "transformers>=4.20.1",
         "datasets>=2.0.0",
-        "opacus<1.0.0",
+        "opacus>=1.2.0",
         "prv-accountant<0.2.0",
-        "torch<1.10"
+        "torch>=1.9.1,<=1.12.1",
     ],
     test_suite="tests",
     zip_safe=False
