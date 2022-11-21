@@ -29,7 +29,7 @@ setup(
     },
     install_requires=[
         "transformers>=4.20.1",
-        "datasets>=2.0.0",
+        "datasets>=2.0.0,<=2.6.1",
         "opacus>=1.2.0,<1.3.0",
         "prv-accountant<0.2.0",
         "torch>=1.9.1,<=1.12.1",
