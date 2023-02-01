@@ -10,7 +10,7 @@ import sys
 import logging
 
 from dataclasses import dataclass, field
-from transformers import AutoTokenizer, AutoConfig, SwitchTransformersForConditionalGeneration
+from transformers import AutoTokenizer, AutoConfig, SwitchTransformersForConditionalGeneration, DataCollatorForLanguageModeling
 
 logger = logging.getLogger(__name__)
 
@@ -61,16 +61,16 @@ def main(args: Arguments):
     model = model.to(train_args.device)
 
     # Load data
-    dataset = datasets.load_dataset('reddit', split="train[:500000]").train_test_split(0.02, seed=args.train.seed)
+    #dataset = datasets.load_dataset('reddit', split="train[:500000]").train_test_split(0.02, seed=args.train.seed)
+    dataset = datasets.load_dataset('ptb_text_only', split="train[:10]").train_test_split(0.2, seed=args.train.seed)
 
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name)
-    tokenizer.pad_token = -100 # Set a dummy pad token we don't use it anyway
 
     # Tokenize data
     with train_args.main_process_first(desc="tokenizing dataset"):
         dataset = dataset.map(
-            lambda batch: tokenizer(batch['content'], padding="max_length", truncation=True, max_length=args.model.sequence_len),
+            lambda batch: tokenizer(batch['sentence'], padding="max_length", truncation=True, max_length=args.model.sequence_len),
             batched=True, num_proc=8, desc="tokenizing dataset", remove_columns=dataset.column_names['train']
         )
 
@@ -81,7 +81,7 @@ def main(args: Arguments):
     model = model.cuda()
     model.train()
 
-    data_collator = dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer)
+    data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
 
     trainer = transformers.Trainer(
         args=train_args,
