@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelArguments:
+    data_dir: str
+
     model_name: str = field(default="gpt2", metadata={
         "help": "Model name in HuggingFace, e.g. 'gpt2'"
     })
@@ -57,21 +59,22 @@ def main(args: Arguments):
     logger.info(f"Training/evaluation parameters {train_args}")
 
     # Load model
-    model = SwitchTransformersForConditionalGeneration.from_pretrained(args.model.model_name)
+    model = SwitchTransformersForConditionalGeneration.from_pretrained(args.model.model_name, cache_dir=args.model.data_dir)
     model = model.to(train_args.device)
 
     # Load data
     #dataset = datasets.load_dataset('reddit', split="train[:500000]").train_test_split(0.02, seed=args.train.seed)
-    dataset = datasets.load_dataset('ptb_text_only', split="train[:10]").train_test_split(0.2, seed=args.train.seed)
+    #dataset = datasets.load_dataset('ptb_text_only', split="train[:10]").train_test_split(0.2, seed=args.train.seed)
+    dataset = datasets.load_dataset('ptb_text_only', split="train[:64]", cache_dir=args.model.data_dir).train_test_split(0.5, seed=args.train.seed)
 
     # Load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model.model_name)
+    tokenizer = AutoTokenizer.from_pretrained(args.model.model_name, use_fast=False)
 
     # Tokenize data
     with train_args.main_process_first(desc="tokenizing dataset"):
         dataset = dataset.map(
             lambda batch: tokenizer(batch['sentence'], padding="max_length", truncation=True, max_length=args.model.sequence_len),
-            batched=True, num_proc=8, desc="tokenizing dataset", remove_columns=dataset.column_names['train']
+            batched=True, num_proc=None, desc="tokenizing dataset", remove_columns=dataset.column_names['train']
         )
 
     if train_args.local_rank == 0:
@@ -91,6 +94,7 @@ def main(args: Arguments):
         data_collator=data_collator
     )
 
+    metrics = trainer.evaluate()
     trainer.train()
 
 if __name__ == "__main__":
