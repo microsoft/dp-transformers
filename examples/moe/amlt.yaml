@@ -18,9 +18,11 @@ environment:
   image_setup:
     - pip install torch==1.12.1
     - pip install transformers==4.26.0
-    - pip install datasets==2.6.1
-  setup:
+    - pip install datasets==2.6.2
+    - pip install evaluate
     - pip install sentencepiece
+    - pip install scikit-learn
+  setup:
     - pip install .
 
 code:
@@ -36,35 +38,75 @@ storage:
     storage_account_name: huinan
     container_name: amulet
 
-jobs:
-  - name: moe-full-nodp-16v100-epochs_100
+search:
+  job_template:
+    name: moe-full-nodp-16v100-sst2_{experiment_name:s}_{auto:4s}
     sku: 32G16-V100
     command:
-      - python -m torch.distributed.run --nproc_per_node 16 examples/moe/fine-tune-nodp-lm.py
+      - python -m torch.distributed.run --nproc_per_node 16 examples/moe/fine-tune-nodp-cls.py
         --data_dir /mnt/input_path/huggingface
-        --output_dir $$AMLT_OUTPUT_DIR
+        --output_dir /mnt/input_path/huggingface/moe/sst2/nodp/{experiment_name:s}_{auto:4s}
         --save_strategy no
         --model_name google/switch-base-8
-        --sequence_len 128
-        --per_device_train_batch_size 1
+        --sequence_len {sequence_len}
+        --per_device_train_batch_size 2
         --gradient_accumulation_steps 1
         --evaluation_strategy steps
-        --eval_steps 2
+        --eval_steps 100
         --log_level info
-        --per_device_eval_batch_size 1
+        --per_device_eval_batch_size 4
         --eval_accumulation_steps 1
         --seed 42
-        --prediction_loss_only
         --weight_decay 0.01
         --remove_unused_columns False
-        --num_train_epochs 100
-        --logging_steps 1
+        --num_train_epochs {num_train_epochs}
+        --logging_steps 50
         --max_grad_norm 0
         --lr_scheduler_type constant
-        --learning_rate 1e-4
+        --learning_rate {learning_rate}
         --disable_tqdm True
         --dataloader_num_workers 2
         --report_to azure_ml
         $EXTRA_ARGS
-    submit_args:
-      max_attempts: 1
+  type: grid
+  max_trials: 1
+  params:
+    - name: num_train_epochs
+      values: choice(10)
+    - name: learning_rate
+      values: choice(0.0001)
+    - name: sequence_len
+      values: choice(128)
+
+# jobs:
+#   - name: moe-full-nodp-16v100-epochs_100
+#     sku: 32G16-V100
+#     command:
+#       - python -m torch.distributed.run --nproc_per_node 16 examples/moe/fine-tune-nodp-lm.py
+#         --data_dir /mnt/input_path/huggingface
+#         --output_dir $$AMLT_OUTPUT_DIR
+#         --save_strategy no
+#         --model_name google/switch-base-8
+#         --sequence_len 128
+#         --per_device_train_batch_size 1
+#         --gradient_accumulation_steps 1
+#         --evaluation_strategy steps
+#         --eval_steps 2
+#         --log_level info
+#         --per_device_eval_batch_size 1
+#         --eval_accumulation_steps 1
+#         --seed 42
+#         --prediction_loss_only
+#         --weight_decay 0.01
+#         --remove_unused_columns False
+#         --num_train_epochs 100
+#         --logging_steps 1
+#         --max_grad_norm 0
+#         --lr_scheduler_type constant
+#         --learning_rate 1e-4
+#         --disable_tqdm True
+#         --dataloader_num_workers 2
+#         --report_to azure_ml
+#         $EXTRA_ARGS
+#     submit_args:
+#       max_attempts: 1
