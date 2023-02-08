@@ -69,6 +69,8 @@ class SwitchTransformersModelForSequenceClassification(SwitchTransformersForCond
 class ModelArguments:
     data_dir: str
 
+    task: str
+
     model_name: str = field(default="gpt2", metadata={
         "help": "Model name in HuggingFace, e.g. 'gpt2'"
     })
@@ -82,6 +84,29 @@ class ModelArguments:
 class Arguments:
     train: dp_transformers.TrainingArguments
     model: ModelArguments
+
+
+def data_process(args, tokenizer, dataset):
+
+    # Tokenize data
+    with train_args.main_process_first(desc="tokenizing dataset"):
+        dataset = dataset.map(
+            lambda batch: tokenizer(batch['sentence'], padding="max_length", truncation=True, max_length=args.model.sequence_len),
+            batched=True, num_proc=None, desc="tokenizing dataset", remove_columns=[c for c in dataset['train'].column_names if c != 'label']
+        )
+    
+    if args.model.task == 'sst2':
+        int_to_string_sentiment = {0: "negative", 1: "positive", -1: "unknown"}
+
+        with train_args.main_process_first(desc="process labels"):
+            dataset = dataset.map(
+                lambda batch: {"labels": [tokenizer.convert_tokens_to_ids(int_to_string_sentiment[batch["label"]])]},
+                batched=False, num_proc=None, desc="changing int to string for sentiment", remove_columns=['label']
+            )
+    else:
+        raise ValueError(f"Unsupported task: {args.model.task}")
+    
+    return dataset
 
 
 def main(args: Arguments):
@@ -109,23 +134,13 @@ def main(args: Arguments):
     logger.info(f"Training/evaluation parameters {train_args}")
 
     # Load data
-    dataset = datasets.load_dataset("sst2", cache_dir=args.model.data_dir)
+    dataset = datasets.load_dataset(args.model.task, cache_dir=args.model.data_dir)
     
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name, use_fast=False)
 
-    int_to_string_sentiment = {0: "negative", 1: "positive", -1: "unknown"}
-
-    # Tokenize data
-    with train_args.main_process_first(desc="tokenizing dataset"):
-        dataset = dataset.map(
-            lambda batch: tokenizer(batch['sentence'], padding="max_length", truncation=True, max_length=args.model.sequence_len),
-            batched=True, num_proc=None, desc="tokenizing dataset", remove_columns=[c for c in dataset['train'].column_names if c != 'label']
-        )
-        dataset = dataset.map(
-            lambda batch: {"labels": [tokenizer.convert_tokens_to_ids(int_to_string_sentiment[batch["label"]])]},
-            batched=False, num_proc=None, desc="changing int to string for sentiment", remove_columns=['label']
-        )
+    # Tokenize and process data
+    dataset = data_process(args, tokenizer, dataset)
 
     # Load model
     model = SwitchTransformersModelForSequenceClassification.from_pretrained(args.model.model_name, cache_dir=args.model.data_dir)
