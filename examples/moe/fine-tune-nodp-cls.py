@@ -87,21 +87,34 @@ class Arguments:
 
 
 def data_process(args, tokenizer, dataset):
-
-    # Tokenize data
-    with train_args.main_process_first(desc="tokenizing dataset"):
-        dataset = dataset.map(
-            lambda batch: tokenizer(batch['sentence'], padding="max_length", truncation=True, max_length=args.model.sequence_len),
-            batched=True, num_proc=None, desc="tokenizing dataset", remove_columns=[c for c in dataset['train'].column_names if c != 'label']
-        )
     
     if args.model.task == 'sst2':
+        # Tokenize data
+        with train_args.main_process_first(desc="tokenizing dataset"):
+            dataset = dataset.map(
+                lambda batch: tokenizer(batch['sentence'], padding="max_length", truncation=True, max_length=args.model.sequence_len),
+                batched=True, num_proc=None, desc="tokenizing dataset", remove_columns=[c for c in dataset['train'].column_names if c != 'label']
+            )
+
         int_to_string_sentiment = {0: "negative", 1: "positive", -1: "unknown"}
 
         with train_args.main_process_first(desc="process labels"):
             dataset = dataset.map(
                 lambda batch: {"labels": [tokenizer.convert_tokens_to_ids(int_to_string_sentiment[batch["label"]])]},
                 batched=False, num_proc=None, desc="changing int to string for sentiment", remove_columns=['label']
+            )
+    elif args.model.task == 'SetFit/mnli':
+        # Tokenize data
+        with train_args.main_process_first(desc="tokenizing dataset"):
+            dataset = dataset.map(
+                lambda batch: tokenizer(batch['text1'] + " </s> " + batch['text2'], padding="max_length", truncation=True, max_length=args.model.sequence_len),
+                batched=False, num_proc=None, desc="tokenizing dataset", remove_columns=[c for c in dataset['train'].column_names if c != 'label']
+            )
+
+        with train_args.main_process_first(desc="process labels"):
+            dataset = dataset.map(
+                lambda batch: {"labels": [str(batch["label"])]},
+                batched=False, num_proc=None, desc="string label for inline prediction", remove_columns=['label']
             )
     else:
         raise ValueError(f"Unsupported task: {args.model.task}")

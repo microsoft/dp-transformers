@@ -38,22 +38,23 @@ storage:
     storage_account_name: huinan
     container_name: amulet
 
+
 search:
   job_template:
-    name: moe-full-nodp-16v100-sst2_{experiment_name:s}_{auto:4s}
+    name: moe-full-nodp-16v100-mnli_{experiment_name:s}_{auto:4s}
     sku: 32G16-V100
     command:
       - python -m torch.distributed.run --nproc_per_node 16 examples/moe/fine-tune-nodp-cls.py
         --data_dir /mnt/input_path/huggingface
         --task {task}
-        --output_dir /mnt/input_path/huggingface/moe/sst2/nodp/{experiment_name:s}_{auto:4s}
+        --output_dir /mnt/input_path/huggingface/moe/mnli/nodp/{experiment_name:s}_{auto:4s}
         --save_strategy no
         --model_name google/switch-base-8
         --sequence_len {sequence_len}
         --per_device_train_batch_size 2
         --gradient_accumulation_steps 1
         --evaluation_strategy steps
-        --eval_steps 100
+        --eval_steps 250
         --log_level info
         --per_device_eval_batch_size 4
         --eval_accumulation_steps 1
@@ -61,7 +62,7 @@ search:
         --weight_decay 0.01
         --remove_unused_columns False
         --num_train_epochs {num_train_epochs}
-        --logging_steps 50
+        --logging_steps 125
         --max_grad_norm 0
         --lr_scheduler_type constant
         --learning_rate {learning_rate}
@@ -79,7 +80,51 @@ search:
     - name: sequence_len
       values: choice(128)
     - name: task
-      values: choice("sst2")
+      values: choice("SetFit/mnli")
+
+
+# search:
+#   job_template:
+#     name: moe-full-nodp-16v100-sst2_{experiment_name:s}_{auto:4s}
+#     sku: 32G16-V100
+#     command:
+#       - python -m torch.distributed.run --nproc_per_node 16 examples/moe/fine-tune-nodp-cls.py
+#         --data_dir /mnt/input_path/huggingface
+#         --task {task}
+#         --output_dir /mnt/input_path/huggingface/moe/sst2/nodp/{experiment_name:s}_{auto:4s}
+#         --save_strategy no
+#         --model_name google/switch-base-8
+#         --sequence_len {sequence_len}
+#         --per_device_train_batch_size 2
+#         --gradient_accumulation_steps 1
+#         --evaluation_strategy steps
+#         --eval_steps 100
+#         --log_level info
+#         --per_device_eval_batch_size 4
+#         --eval_accumulation_steps 1
+#         --seed 42
+#         --weight_decay 0.01
+#         --remove_unused_columns False
+#         --num_train_epochs {num_train_epochs}
+#         --logging_steps 50
+#         --max_grad_norm 0
+#         --lr_scheduler_type constant
+#         --learning_rate {learning_rate}
+#         --disable_tqdm True
+#         --dataloader_num_workers 2
+#         --report_to azure_ml
+#         $EXTRA_ARGS
+#   type: grid
+#   max_trials: 1
+#   params:
+#     - name: num_train_epochs
+#       values: choice(3)
+#     - name: learning_rate
+#       values: choice(0.0001)
+#     - name: sequence_len
+#       values: choice(128)
+#     - name: task
+#       values: choice("sst2")
 
 # jobs:
 #   - name: moe-full-nodp-16v100-epochs_100
