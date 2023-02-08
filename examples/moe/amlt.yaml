@@ -72,7 +72,7 @@ search:
   max_trials: 1
   params:
     - name: num_train_epochs
-      values: choice(10)
+      values: choice(3)
     - name: learning_rate
       values: choice(0.0001)
     - name: sequence_len

@@ -21,15 +21,6 @@ logger = logging.getLogger(__name__)
 
 class SwitchTransformersModelForSequenceClassification(SwitchTransformersForConditionalGeneration):
 
-    def __init__(self, config):
-        super().__init__(config)
-        self.config = config
-
-        self.switchtransformersforconditionalgeneration = SwitchTransformersForConditionalGeneration(config)
-
-        # Initialize weights and apply final processing
-        self.post_init()
-
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -51,7 +42,7 @@ class SwitchTransformersModelForSequenceClassification(SwitchTransformersForCond
         return_dict: Optional[bool] = None,
     ):
 
-        outputs = self.switchtransformersforconditionalgeneration(
+        outputs = super().forward(
             input_ids=input_ids,
             attention_mask=attention_mask,
             decoder_input_ids=decoder_input_ids,
@@ -137,9 +128,7 @@ def main(args: Arguments):
         )
 
     # Load model
-    config = AutoConfig.from_pretrained(args.model.model_name)
-    model = SwitchTransformersModelForSequenceClassification(config)
-    model.switchtransformersforconditionalgeneration = SwitchTransformersForConditionalGeneration.from_pretrained(args.model.model_name, cache_dir=args.model.data_dir)
+    model = SwitchTransformersModelForSequenceClassification.from_pretrained(args.model.model_name, cache_dir=args.model.data_dir)
     model = model.to(train_args.device)
 
     if train_args.local_rank == 0:
