@@ -136,7 +136,7 @@ def main(args: Arguments):
         args=train_args,
         model=model,
         train_dataset=dataset['train'],
-        eval_dataset=dataset['test'],
+        eval_dataset=dataset['validation'],
         data_collator=data_collator,
         privacy_args=privacy_args,
         tokenizer=tokenizer
