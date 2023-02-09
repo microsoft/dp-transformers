@@ -3,7 +3,9 @@
 
 '''Train GPT2 model series with DP (w/ parameter-efficient approach LoRA when lora_dim > 0)'''
 
+import os
 import datasets
+import torch
 import dp_transformers
 import transformers
 import sys
@@ -78,17 +80,35 @@ def main(args: Arguments):
     model = model.to(train_args.device)
 
     # Load data
-    dataset = datasets.load_dataset('reddit', split="train[:500000]").train_test_split(0.02, seed=args.train.seed)
+    data_path = "C:\\Users\\huinan\\OneDrive - Microsoft\\Desktop\\dp-transformers\\examples\\nlg-reddit\\sample-level-dp\\tiny.csv"
+    dataset = datasets.load_dataset('csv', data_files={'train': data_path, 'validation': data_path}) #.train_test_split(0.2, seed=args.train.seed)
 
     # Load tokenizer
     tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name)
-    tokenizer.pad_token = -100 # Set a dummy pad token we don't use it anyway
+    num_added_toks = tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+    mean_tok_emb = model.transformer.wte.weight.data.mean(dim=0)
+    model.resize_token_embeddings(len(tokenizer))
+    #initialize the newly-added token embedding to the mean of all token embeddings
+    for i in range(num_added_toks):
+        model.transformer.wte.weight.data[-(i + 1), :] = mean_tok_emb
+
+    label_column_names = [name for name in dataset["train"].column_names if "label" in name]
+    # Tokenize data
+    def preprocess_function(examples):
+        batch = []
+        for t in range(len(examples['text'])):
+            text = "\t".join([examples[name][t] for name in label_column_names]) + "\n\n" + examples['text'][t] + tokenizer.eos_token
+            batch.append(text)
+
+        result = tokenizer(batch, padding="max_length", truncation=True,
+                           max_length=args.model.sequence_len)
+
+        return result
 
     # Tokenize data
     with train_args.main_process_first(desc="tokenizing dataset"):
         dataset = dataset.map(
-            lambda batch: tokenizer(batch['content'], padding="max_length", truncation=True, max_length=args.model.sequence_len),
-            batched=True, num_proc=8, desc="tokenizing dataset", remove_columns=dataset.column_names['train']
+            preprocess_function, batched=True, desc="tokenizing dataset", remove_columns=dataset.column_names['train']
         )
 
     if args.model.lora_dim > 0:
@@ -119,10 +139,11 @@ def main(args: Arguments):
         eval_dataset=dataset['test'],
         data_collator=data_collator,
         privacy_args=privacy_args,
+        tokenizer=tokenizer
     )
 
     try:
-        trainer.train()
+        train_result = trainer.train()
     finally:
         eps_prv = trainer.get_prv_epsilon()
         eps_rdp = trainer.get_rdp_epsilon()
@@ -130,6 +151,14 @@ def main(args: Arguments):
             "final_epsilon_prv": eps_prv,
             "final_epsilon_rdp": eps_rdp
         })
+
+    if train_args.local_rank == 0 or train_args.local_rank == -1:
+        metrics = train_result.metrics
+        trainer.save_model()
+        torch.save(model.module.transformer.state_dict(), os.path.join(train_args.output_dir, "pytorch_model.bin"))
+        trainer.log_metrics("train", metrics)
+        trainer.save_metrics("train", metrics)
+        #trainer.save_state()
 
 if __name__ == "__main__":
     arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, dp_transformers.PrivacyArguments, ModelArguments))
