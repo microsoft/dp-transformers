@@ -155,6 +155,7 @@ def main(args: Arguments):
     if train_args.local_rank == 0 or train_args.local_rank == -1:
         metrics = train_result.metrics
         trainer.save_model()
+        model.module.config.save_pretrained(train_args.output_dir)
         torch.save(model.module.transformer.state_dict(), os.path.join(train_args.output_dir, "pytorch_model.bin"))
         trainer.log_metrics("train", metrics)
         trainer.save_metrics("train", metrics)
