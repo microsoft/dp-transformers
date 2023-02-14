@@ -1,0 +1,106 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+$schema: https://componentsdk.azureedge.net/jsonschema/CommandComponent.json
+name: microsoft.fhl.transformers.dp.generate
+version: 0.0.0
+display_name: "dp-transformers-generation"
+type: CommandComponent
+description: >-
+  https://github.com/microsoft/dp-transformers/
+
+is_deterministic: true
+
+tags:
+  git: https://github.com/microsoft/dp-transformers
+
+inputs:
+  input_training_file:
+    type: AnyDirectory
+    description: Training data in csv format
+
+  model_type:
+    type: Enum
+    default: gpt2
+    enum:
+      - gpt2
+      - gpt2-medium
+      - gpt2-large
+      - gpt2-xl
+
+  model_name_or_path:
+    type: AnyDirectory
+    description: Model
+
+  length:
+    type: Integer
+    default: 256
+
+  total_sequences:
+    type: Integer
+    default: 120
+
+  batch_size:
+    type: Integer
+    default: 8
+
+  lora_dim:
+    type: Integer
+    default: 4
+  
+  lora_alpha:
+    type: Float
+    default: 32
+
+  lora_dropout:
+    type: Float
+    default: 0.0
+
+outputs:
+  output_dir:
+    type: AnyDirectory
+    description: "output_dir"
+
+command: >-
+  python examples/nlg-reddit/sample-level-dp/generate-text.py
+  --model_type {inputs.model_type}
+  --model_name_or_path {inputs.model_name_or_path}
+  --input_training_file {inputs.input_training_file}
+  --output_dir {outputs.output_dir}
+  --length {inputs.length}
+  --total_sequences {inputs.total_sequences}
+  --batch_size {inputs.batch_size}
+  --lora_dim {inputs.lora_dim}
+  --lora_alpha {inputs.lora_alpha}
+  --lora_dropout {inputs.lora_dropout}
+  --do_sample
+
+environment:
+  docker:
+    image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04:latest
+  conda:
+    conda_dependencies:
+      name: project_environment
+      channels:
+      - conda-forge
+      dependencies:
+      - pip=20.2
+      - python=3.7.9
+      - scikit-surprise=1.0.6
+      - pip:
+        - waitress==2.0.0
+        - azureml-designer-classic-modules==0.0.161
+        - https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.1.0/en_core_web_sm-2.1.0.tar.gz#egg=en_core_web_sm
+        - spacy==2.1.7
+        - shrike
+        - pyarrow==11.0.0
+        - pandas
+        - opacus==1.1.3
+        - torch==1.12.1
+        - transformers==4.20.1
+        - datasets==2.0.0
+        - opacus==1.1.3
+        - prv-accountant<0.2.0
+        - sklearn
+        - dp-transformers
+  os: Linux

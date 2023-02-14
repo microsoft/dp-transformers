@@ -240,14 +240,16 @@ def main():
 
     with torch.no_grad():
         prompt_counter = collections.Counter()
-        with open(args.input_training_file,encoding='utf-8') as rf:
+        data_path = os.path.join(args.input_training_file, "train.csv")
+        with open(data_path, encoding='utf-8') as rf:
             csv_reader = csv.reader(rf)
             title = next(csv_reader)
 
-            label_column_index = [i for i,name in enumerate(title) if "label" in name]
+            #label_column_index = [i for i,name in enumerate(title) if "label" in name]
 
             for line in csv_reader:
-                prompt = "\t".join([line[idx] for idx in label_column_index]) + "\n\n"
+                #prompt = "\t".join([line[idx] for idx in label_column_index]) + "\n\n"
+                prompt = "Write an email with subject:"
                 prompt_counter[prompt] += 1
 
         ratio_generation_training = args.total_sequences / sum(prompt_counter.values())

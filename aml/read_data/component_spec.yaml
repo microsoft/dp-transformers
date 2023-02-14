@@ -3,7 +3,7 @@
 
 $schema: https://componentsdk.azureedge.net/jsonschema/CommandComponent.json
 name: data_preprocess
-version: 0.0.18
+version: 0.0.19
 display_name: Preprocessing
 type: CommandComponent
 description: A preprocessing module

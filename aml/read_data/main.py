@@ -67,8 +67,9 @@ def main(args):
         for file in all_files:
             df = pd.read_parquet(file)
             for index, row in df.iterrows():
-                csvwriter.writerow([row["Subject"], row["UniqueBody"]])
-                all_lines += 1
+                if row["Subject"] and row["UniqueBody"] and len(str(row["Subject"])) > 5 and len(str(row["UniqueBody"])) > 5:
+                    csvwriter.writerow([str(row["Subject"]), str(row["UniqueBody"])])
+                    all_lines += 1
 
     logger.info(f"Total lines: {all_lines}", category=DataCategory.PUBLIC)
 

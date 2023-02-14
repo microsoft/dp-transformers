@@ -9,6 +9,9 @@ import torch
 import dp_transformers
 import transformers
 import sys
+import shrike
+from shrike.compliant_logging.exceptions import prefix_stack_trace
+from shrike.compliant_logging.constants import DataCategory
 import logging
 
 from dataclasses import dataclass, field
@@ -17,11 +20,15 @@ from dp_transformers.layers.dp_merged_linear import mark_only_lora_as_trainable
 from dp_transformers.module_modification import convert_gpt2_attention_to_lora
 
 
-logger = logging.getLogger(__name__)
+#logger = logging.getLogger(__name__)
 
 
 @dataclass
 class ModelArguments:
+    training_data: str = field(default="./", metadata={
+        "help": "Path to training data"
+    })
+
     model_name: str = field(default="gpt2", metadata={
         "help": "Model name in HuggingFace, e.g. 'gpt2'"
     })
@@ -50,7 +57,18 @@ class Arguments:
     model: ModelArguments
 
 
+@prefix_stack_trace(keep_message=True)
 def main(args: Arguments):
+
+    shrike.compliant_logging.enable_compliant_logging(
+        "SystemLog:",
+        level="INFO",
+        format="%(prefix)s%(levelname)s:%(name)s:%(message)s",
+    )
+
+    logger = logging.getLogger(__name__)
+    logger.info("Hello, world!", category=DataCategory.PUBLIC)
+
     transformers.set_seed(args.train.seed)
 
     # Setup logging
@@ -70,17 +88,19 @@ def main(args: Arguments):
     # Log on each process the small summary:
     logger.warning(
         f"Process rank: {train_args.local_rank}, device: {train_args.device}, n_gpu: {train_args.n_gpu}, "
-        f"distributed training: {bool(train_args.local_rank != -1)}, 16-bits training: {train_args.fp16}"
+        f"distributed training: {bool(train_args.local_rank != -1)}, 16-bits training: {train_args.fp16}",
+        category=DataCategory.PUBLIC
     )
-    logger.info(f"Training/evaluation parameters {train_args}")
-    logger.info(f"Privacy parameters {privacy_args}")
+    logger.info(f"Training/evaluation parameters {train_args}", category=DataCategory.PUBLIC)
+    logger.info(f"Privacy parameters {privacy_args}", category=DataCategory.PUBLIC)
 
     # Load model
     model = transformers.AutoModelForCausalLM.from_pretrained(args.model.model_name)
     model = model.to(train_args.device)
 
     # Load data
-    data_path = "C:\\Users\\huinan\\OneDrive - Microsoft\\Desktop\\dp-transformers\\examples\\nlg-reddit\\sample-level-dp\\tiny.csv"
+    # data_path = "C:\\Users\\huinan\\OneDrive - Microsoft\\Desktop\\dp-transformers\\examples\\nlg-reddit\\sample-level-dp\\tiny.csv"
+    data_path = os.path.join(args.model.training_data, "train.csv") 
     dataset = datasets.load_dataset('csv', data_files={'train': data_path, 'validation': data_path}) #.train_test_split(0.2, seed=args.train.seed)
 
     # Load tokenizer
@@ -92,12 +112,15 @@ def main(args: Arguments):
     for i in range(num_added_toks):
         model.transformer.wte.weight.data[-(i + 1), :] = mean_tok_emb
 
-    label_column_names = [name for name in dataset["train"].column_names if "label" in name]
+    # label_column_names = [name for name in dataset["train"].column_names if "label" in name]
     # Tokenize data
     def preprocess_function(examples):
         batch = []
-        for t in range(len(examples['text'])):
-            text = "\t".join([examples[name][t] for name in label_column_names]) + "\n\n" + examples['text'][t] + tokenizer.eos_token
+        # for t in range(len(examples['text'])):
+        #     text = "\t".join([examples[name][t] for name in label_column_names]) + "\n\n" + examples['text'][t] + tokenizer.eos_token
+        #     batch.append(text)
+        for t in range(len(examples['Subject'])):
+            text = "Write an email with subject: " + examples['Subject'][t] + "\n\n" + examples['UniqueBody'][t] + tokenizer.eos_token
             batch.append(text)
 
         result = tokenizer(batch, padding="max_length", truncation=True,
@@ -119,8 +142,8 @@ def main(args: Arguments):
         mark_only_lora_as_trainable(model)
 
     if train_args.local_rank == 0:
-        logger.info(f"Total number of parameters of the model: {model.num_parameters(only_trainable=False)}")
-        logger.info(f"Fine-tuned number of parameters of the model: {model.num_parameters(only_trainable=True)}")
+        logger.info(f"Total number of parameters of the model: {model.num_parameters(only_trainable=False)}", category=DataCategory.PUBLIC)
+        logger.info(f"Fine-tuned number of parameters of the model: {model.num_parameters(only_trainable=True)}", category=DataCategory.PUBLIC)
 
     model = model.cuda()
     model.train()
@@ -155,10 +178,10 @@ def main(args: Arguments):
     if train_args.local_rank == 0 or train_args.local_rank == -1:
         metrics = train_result.metrics
         trainer.save_model()
-        model.module.config.save_pretrained(train_args.output_dir)
-        torch.save(model.module.transformer.state_dict(), os.path.join(train_args.output_dir, "pytorch_model.bin"))
         trainer.log_metrics("train", metrics)
         trainer.save_metrics("train", metrics)
+        model._module.module.config.save_pretrained(train_args.output_dir)
+        torch.save(model._module.module.transformer.state_dict(), os.path.join(train_args.output_dir, "pytorch_model.bin"))
         #trainer.save_state()
 
 if __name__ == "__main__":
