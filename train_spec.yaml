@@ -1,6 +1,6 @@
 $schema: http://azureml/sdk-1-5/DistributedComponent.json
 name: microsoft.fhl.transformers.dp.finetune.huinan
-version: 0.0.2
+version: 0.0.7
 display_name: "dp-transformers-huinan"
 type: DistributedComponent
 description: >-
@@ -169,12 +169,7 @@ environment:
       dependencies:
       - pip=20.2
       - python=3.7.9
-      - scikit-surprise=1.0.6
       - pip:
-        - waitress==2.0.0
-        - azureml-designer-classic-modules==0.0.161
-        - https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.1.0/en_core_web_sm-2.1.0.tar.gz#egg=en_core_web_sm
-        - spacy==2.1.7
         - shrike
         - pyarrow==11.0.0
         - pandas
@@ -184,5 +179,6 @@ environment:
         - datasets==2.0.0
         - opacus==1.1.3
         - prv-accountant<0.2.0
+        - scikit-learn
         - dp-transformers
   os: Linux

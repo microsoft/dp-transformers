@@ -20,10 +20,14 @@
 
 import argparse
 import collections
+import sys
 import csv
 import logging
 import os.path
 import random
+import shrike
+from shrike.compliant_logging.exceptions import prefix_stack_trace
+from shrike.compliant_logging.constants import DataCategory
 
 import numpy as np
 import torch
@@ -34,13 +38,23 @@ from tqdm import tqdm
 
 from dp_transformers.module_modification import convert_gpt2_attention_to_lora
 
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-    datefmt="%m/%d/%Y %H:%M:%S",
-    level=logging.INFO,
-)
-logger = logging.getLogger(__name__)
+# logging.basicConfig(
+#     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+#     datefmt="%m/%d/%Y %H:%M:%S",
+#     level=logging.INFO,
+# )
+# logger = logging.getLogger(__name__)
 
+maxInt = sys.maxsize
+
+while True:
+    # decrease the maxInt value by factor 10 
+    # as long as the OverflowError occurs.
+    try:
+        csv.field_size_limit(maxInt)
+        break
+    except OverflowError:
+        maxInt = int(maxInt/10)
 
 MODEL_CLASSES = {
     "distilgpt2": (GPT2LMHeadModel, GPT2Tokenizer),
@@ -80,6 +94,19 @@ def cal_perplexity(encodings, cur_model):
 
     return ppl_cur.item()
 
+
+def convert_model(checkpoint_path):
+    sd = torch.load(os.path.join(checkpoint_path, "pytorch_model.bin"), map_location="cpu")
+    state_dict = {}
+    for key, value in sd.items():
+        key = key.replace("_module.module.", "")
+        state_dict[key] = value
+
+    #torch.save(state_dict, os.path.join(checkpoint_path, "pytorch_model.bin"))
+    return state_dict
+
+
+@prefix_stack_trace(keep_message=True)
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -148,6 +175,15 @@ def main():
 
     args = parser.parse_args()
 
+    shrike.compliant_logging.enable_compliant_logging(
+        "SystemLog:",
+        level="INFO",
+        format="%(prefix)s%(levelname)s:%(name)s:%(message)s",
+    )
+
+    logger = logging.getLogger(__name__)
+    logger.info("Hello, world!", category=DataCategory.PUBLIC)
+
     args.device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
     args.n_gpu = 0 if args.no_cuda else torch.cuda.device_count()
 
@@ -177,7 +213,8 @@ def main():
             enable_lora=[True, False, True], merge_weights=False
         )
 
-        state_dict = torch.load(os.path.join(args.model_name_or_path, "pytorch_model.bin"), map_location="cpu")
+        #state_dict = torch.load(os.path.join(args.model_name_or_path, "pytorch_model.bin"), map_location="cpu")
+        state_dict = convert_model(args.model_name_or_path)
         model, missing_keys, unexpected_keys, mismatched_keys, error_msgs = model_class._load_pretrained_model(
                 model,
                 state_dict,
@@ -273,7 +310,8 @@ def main():
     output_path = os.path.join(args.output_dir, str(args.length) + "." + str(args.seed) + ".generations.csv")
     with open(output_path, 'w', newline='', encoding="utf-8") as wf:
         csv_writer = csv.writer(wf)
-        csv_writer.writerow(title)
+        #csv_writer.writerow(title)
+        csv_writer.writerow(["Subject_UniqueBody"])
         for obj in all_sequences:
             if obj[0]: # remove empty sequences
                 csv_writer.writerow(obj)

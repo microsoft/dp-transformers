@@ -180,8 +180,8 @@ def main(args: Arguments):
         trainer.save_model()
         trainer.log_metrics("train", metrics)
         trainer.save_metrics("train", metrics)
-        model._module.module.config.save_pretrained(train_args.output_dir)
-        torch.save(model._module.module.transformer.state_dict(), os.path.join(train_args.output_dir, "pytorch_model.bin"))
+        #model._module.module.config.save_pretrained(train_args.output_dir)
+        #torch.save(model._module.module.transformer.state_dict(), os.path.join(train_args.output_dir, "pytorch_model.bin"))
         #trainer.save_state()
 
 if __name__ == "__main__":
