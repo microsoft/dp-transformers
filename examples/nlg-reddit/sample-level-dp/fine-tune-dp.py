@@ -16,6 +16,33 @@ shrike.compliant_logging.enable_compliant_logging(
         format="%(prefix)s%(levelname)s:%(name)s:%(message)s",
     )
 
+class CompliantLoggerHack(shrike.compliant_logging.logging.CompliantLogger):
+
+    def _log(
+        self,
+        level,
+        msg,
+        args=None,
+        exc_info=None,
+        extra=None,
+        stack_info=False,
+        stacklevel=1,
+        items=None,
+        category=DataCategory.PRIVATE,
+    ):
+        super()._log(
+            level,
+            "SystemLog: " + msg,
+            args,
+            exc_info,
+            extra,
+            stack_info,
+            stacklevel,
+            items,
+            category,
+        )
+
+logging.setLoggerClass(CompliantLoggerHack)
 logger = logging.getLogger(__name__)
 logger.info("Hello, world!", category=DataCategory.PUBLIC)
 
@@ -28,9 +55,6 @@ from dataclasses import dataclass, field
 from transformers.training_args import ParallelMode
 from dp_transformers.layers.dp_merged_linear import mark_only_lora_as_trainable
 from dp_transformers.module_modification import convert_gpt2_attention_to_lora
-
-
-#logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -72,19 +96,19 @@ def main(args: Arguments):
 
     transformers.set_seed(args.train.seed)
 
-    # Setup logging
-    logging.basicConfig(
-        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-        datefmt="%m/%d/%Y %H:%M:%S",
-        handlers=[logging.StreamHandler(sys.stdout)],
-    )
+    # # Setup logging
+    # logging.basicConfig(
+    #     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    #     datefmt="%m/%d/%Y %H:%M:%S",
+    #     handlers=[logging.StreamHandler(sys.stdout)],
+    # )
 
-    log_level = train_args.get_process_log_level()
-    logger.setLevel(log_level)
-    datasets.utils.logging.set_verbosity(log_level)
-    transformers.utils.logging.set_verbosity(log_level)
-    transformers.utils.logging.enable_default_handler()
-    transformers.utils.logging.enable_explicit_format()
+    # log_level = train_args.get_process_log_level()
+    # logger.setLevel(log_level)
+    # datasets.utils.logging.set_verbosity(log_level)
+    # transformers.utils.logging.set_verbosity(log_level)
+    # transformers.utils.logging.enable_default_handler()
+    # transformers.utils.logging.enable_explicit_format()
 
     # Log on each process the small summary:
     logger.warning(

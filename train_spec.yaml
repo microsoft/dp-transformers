@@ -79,7 +79,7 @@ inputs:
 
   num_train_epochs:
     type: Integer
-    default: 3    
+    default: 1
 
   logging_steps:
     type: Integer
