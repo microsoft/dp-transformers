@@ -4,15 +4,25 @@
 '''Train GPT2 model series with DP (w/ parameter-efficient approach LoRA when lora_dim > 0)'''
 
 import os
+import sys
+import logging
+import shrike
+from shrike.compliant_logging.exceptions import prefix_stack_trace
+from shrike.compliant_logging.constants import DataCategory
+
+shrike.compliant_logging.enable_compliant_logging(
+        "SystemLog:",
+        level="INFO",
+        format="%(prefix)s%(levelname)s:%(name)s:%(message)s",
+    )
+
+logger = logging.getLogger(__name__)
+logger.info("Hello, world!", category=DataCategory.PUBLIC)
+
 import datasets
 import torch
 import dp_transformers
 import transformers
-import sys
-import shrike
-from shrike.compliant_logging.exceptions import prefix_stack_trace
-from shrike.compliant_logging.constants import DataCategory
-import logging
 
 from dataclasses import dataclass, field
 from transformers.training_args import ParallelMode
@@ -59,15 +69,6 @@ class Arguments:
 
 @prefix_stack_trace(keep_message=True)
 def main(args: Arguments):
-
-    shrike.compliant_logging.enable_compliant_logging(
-        "SystemLog:",
-        level="INFO",
-        format="%(prefix)s%(levelname)s:%(name)s:%(message)s",
-    )
-
-    logger = logging.getLogger(__name__)
-    logger.info("Hello, world!", category=DataCategory.PUBLIC)
 
     transformers.set_seed(args.train.seed)
 

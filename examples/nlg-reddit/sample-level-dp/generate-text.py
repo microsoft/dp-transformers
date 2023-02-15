@@ -29,6 +29,15 @@ import shrike
 from shrike.compliant_logging.exceptions import prefix_stack_trace
 from shrike.compliant_logging.constants import DataCategory
 
+shrike.compliant_logging.enable_compliant_logging(
+        "SystemLog:",
+        level="INFO",
+        format="%(prefix)s%(levelname)s:%(name)s:%(message)s",
+    )
+
+logger = logging.getLogger(__name__)
+logger.info("Hello, world!", category=DataCategory.PUBLIC)
+
 import numpy as np
 import torch
 
@@ -175,19 +184,10 @@ def main():
 
     args = parser.parse_args()
 
-    shrike.compliant_logging.enable_compliant_logging(
-        "SystemLog:",
-        level="INFO",
-        format="%(prefix)s%(levelname)s:%(name)s:%(message)s",
-    )
-
-    logger = logging.getLogger(__name__)
-    logger.info("Hello, world!", category=DataCategory.PUBLIC)
-
     args.device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
     args.n_gpu = 0 if args.no_cuda else torch.cuda.device_count()
 
-    logger.warning(f"device: {args.device}, n_gpu: {args.n_gpu}, 16-bits training: {args.fp16}")
+    logger.warning(f"device: {args.device}, n_gpu: {args.n_gpu}, 16-bits training: {args.fp16}", category=DataCategory.PUBLIC)
 
     set_seed(args)
 
@@ -237,7 +237,7 @@ def main():
     if args.fp16:
         model.half()
 
-    logger.info(args)
+    logger.info(args, category=DataCategory.PUBLIC)
 
     def generate_text(prompt,seq_num,prompt_length):
         ppls_cur = []
@@ -301,8 +301,8 @@ def main():
                 all_sequences += sequences
                 ppls_cur += ppls
 
-    logger.info(f"Current PPL: %.2f±%.2f", np.mean(ppls_cur),np.std(ppls_cur))
-    logger.info(f"Total generated sequences: %d", len(all_sequences))
+    logger.info(f"Current PPL: %.2f±%.2f", np.mean(ppls_cur),np.std(ppls_cur), category=DataCategory.PUBLIC)
+    logger.info(f"Total generated sequences: %d", len(all_sequences), category=DataCategory.PUBLIC)
     random.shuffle(all_sequences)
 
     #prefix = list(filter(None, args.model_name_or_path.split("/"))).pop()
@@ -314,7 +314,7 @@ def main():
         csv_writer.writerow(["Subject_UniqueBody"])
         for obj in all_sequences:
             if obj[0]: # remove empty sequences
-                csv_writer.writerow(obj)
+                csv_writer.writerow([obj[0]])
 
 if __name__ == "__main__":
     main()
