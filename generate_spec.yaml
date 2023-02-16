@@ -56,6 +56,31 @@ inputs:
     type: Float
     default: 0.0
 
+# Spark Column Transformer Arguments
+# Dataset input arguments
+  dataset_input_path:
+    type: AnyDirectory
+    description: Path to dataset files. Accepts datasets with Parquet format. Base path can be provided as reading will recurse through folders.
+    optional: false
+
+  dataset_input_format:
+    type: String
+    default: Parquet
+    description: Dataset format. Parquet or Json. Default Parquet.
+    optional: true
+
+# Synthetic dataset input arguments
+  output_format:
+    type: String
+    default: Parquet
+    description: Syntehtic dataset format. Parquet or Json. Default Parquet.
+    optional: true
+  output_partitions:
+    type: Integer
+    default: 0
+    description: Syntehtic dataset number of partitions. For no repartitioning set to 0. Default 0.
+    optional: true
+
 outputs:
   output_dir:
     type: AnyDirectory
@@ -74,6 +99,11 @@ command: >-
   --lora_alpha {inputs.lora_alpha}
   --lora_dropout {inputs.lora_dropout}
   --do_sample
+# Spark Column Transformer Arguments
+  --dataset_input_path {inputs.dataset_input_path}
+  [--dataset_input_format {inputs.dataset_input_format}]
+  [--output_format {inputs.output_format}]
+  [--output_partitions {inputs.output_partitions}]
 
 environment:
   docker:
@@ -98,4 +128,5 @@ environment:
         - prv-accountant<0.2.0
         - scikit-learn
         - dp-transformers
+        - pyspark==3.1.1
   os: Linux

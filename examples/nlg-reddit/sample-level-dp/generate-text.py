@@ -182,6 +182,12 @@ def main():
     parser.add_argument("--lora_alpha", type=int, default=32)
     parser.add_argument("--lora_dropout", type=float, default=0.0)
 
+	# Spark Column Transformer Arguments
+    parser.add_argument("--dataset_input_path",default=None,type=str,required=True)
+    parser.add_argument("--dataset_input_format",default="parquet",type=str,required=False)
+    parser.add_argument("--output_format",default="Parquet",type=str,required=False)
+    parser.add_argument("--output_partitions",default=0,type=int,required=False)
+
     args = parser.parse_args()
 
     args.device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
