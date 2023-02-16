@@ -28,6 +28,9 @@ import random
 import shrike
 from shrike.compliant_logging.exceptions import prefix_stack_trace
 from shrike.compliant_logging.constants import DataCategory
+from pyspark.sql import SparkSession
+import dataframe_utils
+import column_transformer
 
 shrike.compliant_logging.enable_compliant_logging(
         "SystemLog:",
@@ -182,9 +185,15 @@ def main():
     parser.add_argument("--lora_alpha", type=int, default=32)
     parser.add_argument("--lora_dropout", type=float, default=0.0)
 
+    # Prompt arguments
+    parser.add_argument("--prompt_columns", type=str, default="Subject,Importance,HasAttachments")
+    parser.add_argument("--prompt_string", type=str, default="Create email UniqueBody with Subject {}, Importance {} and HasAttachments {}")
+
 	# Spark Column Transformer Arguments
+    # Input dataset arguments
     parser.add_argument("--dataset_input_path",default=None,type=str,required=True)
     parser.add_argument("--dataset_input_format",default="parquet",type=str,required=False)
+    # Synthetic dataset arguments
     parser.add_argument("--output_format",default="Parquet",type=str,required=False)
     parser.add_argument("--output_partitions",default=0,type=int,required=False)
 
@@ -245,6 +254,29 @@ def main():
 
     logger.info(args, category=DataCategory.PUBLIC)
 
+    # Initialize prompt string
+    prompt_columns_list = args.prompt_columns.replace(" ", "").split(',')
+    prompt_string = args.prompt_string.format(*prompt_columns_list)
+    logger.info(f"Prompt columns: {prompt_columns_list}",category=DataCategory.PUBLIC)
+    logger.info(f"Prompt string: {prompt_string}",category=DataCategory.PUBLIC)
+
+    # Initialize Spark
+    logger.info(f"Initializing Spark Session",category=DataCategory.PUBLIC)
+    spark = SparkSession.builder.getOrCreate()
+    spark = SparkSession.builder.appName('GPT2 Email UniqueBody Synthetic Generation').getOrCreate()
+    spark.conf.set("spark.sql.legacy.parquet.int96RebaseModeInRead", "CORRECTED")
+    spark.conf.set("spark.sql.legacy.parquet.int96RebaseModeInWrite", "CORRECTED")
+    spark.conf.set("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "CORRECTED")
+    spark.conf.set("spark.sql.legacy.parquet.datetimeRebaseModeInWrite", "CORRECTED")
+
+    # Read original dataset with Spark
+    df_original = dataframe_utils.read_dataframe(spark,args.dataset_input_path,args.dataset_input_format,logger)
+
+    # TODO
+    # - Decouple generate_text from main into an isolated method
+    # - Make generate_text return a single synthetically generated string
+    # - generate_text inputs:
+    #   - single prompt string
     def generate_text(prompt,seq_num,prompt_length):
         ppls_cur = []
         all_data = []

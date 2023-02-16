@@ -56,8 +56,15 @@ inputs:
     type: Float
     default: 0.0
 
+# Prompt arguments
+  prompt_string:
+    type: String
+    default: "Create email UniqueBody with Subject {}, Importance {} and HasAttachments {}"
+    description: Prompt base string for prompt generation. Prompt will be formed from 'prompt_base_string.format(*prompt_columns_list)'
+    optional: false
+
 # Spark Column Transformer Arguments
-# Dataset input arguments
+# Input dataset arguments
   dataset_input_path:
     type: AnyDirectory
     description: Path to dataset files. Accepts datasets with Parquet format. Base path can be provided as reading will recurse through folders.
@@ -69,7 +76,7 @@ inputs:
     description: Dataset format. Parquet or Json. Default Parquet.
     optional: true
 
-# Synthetic dataset input arguments
+# Synthetic dataset arguments
   output_format:
     type: String
     default: Parquet
@@ -99,6 +106,9 @@ command: >-
   --lora_alpha {inputs.lora_alpha}
   --lora_dropout {inputs.lora_dropout}
   --do_sample
+# Prompt arguments
+  --prompt_columns {inputs.prompt_columns}
+  --prompt_string {inputs.prompt_string}
 # Spark Column Transformer Arguments
   --dataset_input_path {inputs.dataset_input_path}
   [--dataset_input_format {inputs.dataset_input_format}]
