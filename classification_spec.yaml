@@ -1,0 +1,130 @@
+$schema: http://azureml/sdk-1-5/DistributedComponent.json
+name: microsoft.fhl.transformers.dp.finetune.classification
+version: 0.0.0
+display_name: "dp-transformers-classification"
+type: DistributedComponent
+description: >-
+  https://github.com/microsoft/dp-transformers/
+
+is_deterministic: true
+
+tags:
+  git: https://github.com/microsoft/dp-transformers
+
+inputs:
+  train_file:
+    type: AnyDirectory
+    description: Training data in csv format
+  
+  validation_file:
+    type: AnyDirectory
+    description: Val data in csv format
+
+  test_file:
+    type: AnyDirectory
+    description: Test data in csv format
+
+  model_name_or_path:
+    type: Enum
+    default: roberta-base
+    enum:
+      - roberta-base
+      - roberta-large
+
+  sequence_len:
+    type: Integer
+    default: 256
+
+  per_device_train_batch_size:
+    type: Integer
+    default: 4
+
+  evaluation_strategy:
+    type: String
+    default: steps
+
+  eval_steps:
+    type: Integer
+    default: 20
+
+  save_strategy:
+    type: String
+    default: steps  
+
+  per_device_eval_batch_size:
+    type: Integer
+    default: 4    
+
+  num_train_epochs:
+    type: Integer
+    default: 1
+
+  logging_steps:
+    type: Integer
+    default: 10
+
+  learning_rate:
+    type: Float
+    default: 0.00003    
+  
+  label_column_name:
+    type: String
+    default: HasAttachments
+
+outputs:
+  output_dir:
+    type: AnyDirectory
+    description: "output_dir"
+
+launcher:
+  type: mpi
+  additional_arguments: >-
+    python -m torch.distributed.run 
+    --nproc_per_node 8 examples/nlg-reddit/sample-level-dp/run-classification.py
+    --train_file {inputs.train_file}
+    --validation_file {inputs.validation_file}
+    --test_file {inputs.test_file}
+    --label_column_name {inputs.label_column_name}
+    --model_name_or_path {inputs.model_name_or_path}
+    --sequence_len {inputs.sequence_len}
+    --per_device_train_batch_size {inputs.per_device_train_batch_size}
+    --evaluation_strategy {inputs.evaluation_strategy}
+    --eval_steps {inputs.eval_steps}
+    --save_strategy {inputs.save_strategy}
+    --per_device_eval_batch_size {inputs.per_device_eval_batch_size}
+    --num_train_epochs {inputs.num_train_epochs}
+    --logging_steps {inputs.logging_steps}
+    --learning_rate {inputs.learning_rate}
+    --output_dir {outputs.output_dir}
+    --overwrite_cache True
+    --load_best_model_at_end True
+    --do_train
+    --do_eval
+    --do_predict
+    --overwrite_output_dir
+    --report_to azure_ml
+
+environment:
+  docker:
+    image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04:latest
+  conda:
+    conda_dependencies:
+      name: project_environment
+      channels:
+      - conda-forge
+      dependencies:
+      - pip=20.2
+      - python=3.7.9
+      - pip:
+        - shrike
+        - pyarrow==11.0.0
+        - pandas
+        - opacus==1.1.3
+        - torch==1.12.1
+        - transformers==4.20.1
+        - datasets==2.0.0
+        - opacus==1.1.3
+        - prv-accountant<0.2.0
+        - scikit-learn
+        - dp-transformers
+  os: Linux

@@ -311,7 +311,9 @@ def main():
     else:
         # Loading a dataset from your local files.
         # CSV/JSON training and evaluation files are needed.
-        data_files = {"train": data_args.train_file, "validation": data_args.validation_file}
+        train_file_path = os.path.join(data_args.train_file, "train.csv")
+        validation_file_path = os.path.join(data_args.validation_file, "val.csv")
+        data_files = {"train": train_file_path, "validation": validation_file_path}
 
         # Get the test dataset: you can provide your own CSV/JSON test file (see below)
         # when you use `do_predict` without specifying a GLUE benchmark task.
@@ -322,7 +324,7 @@ def main():
                 assert (
                     test_extension == train_extension
                 ), "`test_file` should have the same extension (csv or json) as `train_file`."
-                data_files["test"] = data_args.test_file
+                data_files["test"] = os.path.join(data_args.test_file, "test.csv")
             else:
                 raise ValueError("Need either a GLUE task or a test file for `do_predict`.")
 
@@ -405,19 +407,19 @@ def main():
         ignore_mismatched_sizes=model_args.ignore_mismatched_sizes,
     )
 
-    # Preprocessing the raw_datasets
-    if data_args.task_name is not None:
-        sentence1_key, sentence2_key = task_to_keys[data_args.task_name]
-    else:
-        # Again, we try to have some nice defaults but don't hesitate to tweak to your use case.
-        non_label_column_names = [name for name in raw_datasets["train"].column_names if "label" not in name]
-        if "sentence1" in non_label_column_names and "sentence2" in non_label_column_names:
-            sentence1_key, sentence2_key = "sentence1", "sentence2"
-        else:
-            if len(non_label_column_names) >= 2:
-                sentence1_key, sentence2_key = non_label_column_names[:2]
-            else:
-                sentence1_key, sentence2_key = non_label_column_names[0], None
+    # # Preprocessing the raw_datasets
+    # if data_args.task_name is not None:
+    #     sentence1_key, sentence2_key = task_to_keys[data_args.task_name]
+    # else:
+    #     # Again, we try to have some nice defaults but don't hesitate to tweak to your use case.
+    #     non_label_column_names = [name for name in raw_datasets["train"].column_names if "label" not in name]
+    #     if "sentence1" in non_label_column_names and "sentence2" in non_label_column_names:
+    #         sentence1_key, sentence2_key = "sentence1", "sentence2"
+    #     else:
+    #         if len(non_label_column_names) >= 2:
+    #             sentence1_key, sentence2_key = non_label_column_names[:2]
+    #         else:
+    #             sentence1_key, sentence2_key = non_label_column_names[0], None
 
     # Padding strategy
     if data_args.pad_to_max_length:
@@ -462,10 +464,21 @@ def main():
 
     def preprocess_function(examples):
         # Tokenize the texts
-        args = (
-            (examples[sentence1_key],) if sentence2_key is None else (examples[sentence1_key], examples[sentence2_key])
-        )
-        result = tokenizer(*args, padding=padding, max_length=max_seq_length, truncation=True)
+        # args = (
+        #     (examples[sentence1_key],) if sentence2_key is None else (examples[sentence1_key], examples[sentence2_key])
+        # )
+        # result = tokenizer(*args, padding=padding, max_length=max_seq_length, truncation=True)
+        batch = []
+        if 'Subject' in examples:
+            for t in range(len(examples['Subject'])):
+                text = f"{examples['Subject'][t]} END END END {examples['UniqueBody'][t]}" 
+                batch.append(text)
+        elif 'Subject_UniqueBody' in examples:
+            for t in range(len(examples['Subject_UniqueBody'])):
+                text = f"{examples['Subject_UniqueBody'][t]}" 
+                batch.append(text)
+        
+        result = tokenizer(batch, padding=padding, max_length=max_seq_length, truncation=True)
 
         # Map labels to IDs (not necessary for GLUE tasks)
         if label_to_id is not None and label_column_name in examples:

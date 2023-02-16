@@ -298,6 +298,7 @@ def main():
         for prompt_text in tqdm(prompt_counter):
             prompt = tokenizer(prompt_text)['input_ids']
             num_seq_to_generate = round(prompt_counter[prompt_text] * ratio_generation_training)
+            logger.info(f"prompt text: {prompt_text}, num_seq_to_generate: {num_seq_to_generate}", category=DataCategory.PUBLIC)
             if num_seq_to_generate>0:
                 sequences, ppls = generate_text(prompt, num_seq_to_generate, len(prompt_text))
                 all_sequences += sequences
@@ -309,14 +310,20 @@ def main():
 
     #prefix = list(filter(None, args.model_name_or_path.split("/"))).pop()
     os.makedirs(args.output_dir, exist_ok=True)
-    output_path = os.path.join(args.output_dir, str(args.length) + "." + str(args.seed) + ".generations.csv")
+    #output_path = os.path.join(args.output_dir, str(args.length) + "." + str(args.seed) + ".generations.csv")
+    output_path = os.path.join(args.output_dir, "train.csv")
     with open(output_path, 'w', newline='', encoding="utf-8") as wf:
         csv_writer = csv.writer(wf)
         #csv_writer.writerow(title)
-        csv_writer.writerow(["Subject_UniqueBody"])
+        csv_writer.writerow(["Subject_UniqueBody", "HasAttachments"])
         for obj in all_sequences:
             if obj[0]: # remove empty sequences
-                csv_writer.writerow([obj[0]])
+                if "False" in obj[1]:
+                    csv_writer.writerow([obj[0], "False"])
+                elif "True" in obj[1]:
+                    csv_writer.writerow([obj[0], "True"])
+                else:
+                    raise ValueError("Invalid label")
 
 if __name__ == "__main__":
     main()

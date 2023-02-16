@@ -28,7 +28,7 @@ def main(args):
     logger.info("public info", category=DataCategory.PUBLIC)
     logger.info("Hello, world!", category=DataCategory.PUBLIC)
 
-    data_path = os.path.join(args.model.training_data, "train.csv")
+    data_path = os.path.join(args.training_data, "train.csv")
     dataset = datasets.load_dataset('csv', data_files={'train': data_path})
 
     dataset2 = dataset['train'].train_test_split(test_size=0.3)

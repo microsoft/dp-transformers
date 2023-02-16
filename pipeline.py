@@ -25,6 +25,7 @@ preprocessing_module = Component.from_yaml(yaml_file="preprocess_spec.yaml")
 split_module = Component.from_yaml(yaml_file="split_spec.yaml")
 dp_module = Component.from_yaml(yaml_file="train_spec.yaml")
 generation_module = Component.from_yaml(yaml_file="generate_spec.yaml")
+classification_module = Component.from_yaml(yaml_file="classification_spec.yaml")
 
 training_dataset = Dataset.get_by_name(ws, name=TRAINING_DATA['name'], version=TRAINING_DATA['version'])
 
@@ -50,6 +51,13 @@ def dp_transformer_training_pipeline(
         training_data=preprocessing_module_step.outputs.output_dir
     )
 
+    classification_module_step_1 = classification_module(
+        train_file=split_module_step.outputs.output_dir,
+        validation_file=split_module_step.outputs.output_dir,
+        test_file=split_module_step.outputs.output_dir
+    )
+
+
     dp_module_step = dp_module(
         training_data=split_module_step.outputs.output_dir
     )
@@ -57,6 +65,12 @@ def dp_transformer_training_pipeline(
     generation_module_step = generation_module(
         input_training_file=split_module_step.outputs.output_dir,
         model_name_or_path=dp_module_step.outputs.output_dir
+    )
+
+    classification_module_step_2 = classification_module(
+        train_file=generation_module_step.outputs.output_dir,
+        validation_file=split_module_step.outputs.output_dir,
+        test_file=split_module_step.outputs.output_dir
     )
 
     return 
