@@ -20,7 +20,9 @@ ws = Workspace.get(name=aml_config['workspace_name'], subscription_id=aml_config
 # this is standard way to get workspace but I didn't want to share too many files, I added aml_config.json in the same file
 #ws = Workspace.from_config() # if you have config.json in the same folder
 
-preprocessing_module = Component.load(name="data_preprocess", version="0.0.19", workspace=ws)
+#preprocessing_module = Component.load(name="data_preprocess", version="0.0.19", workspace=ws)
+preprocessing_module = Component.from_yaml(yaml_file="preprocess_spec.yaml")
+split_module = Component.from_yaml(yaml_file="split_spec.yaml")
 dp_module = Component.from_yaml(yaml_file="train_spec.yaml")
 generation_module = Component.from_yaml(yaml_file="generate_spec.yaml")
 
@@ -44,12 +46,16 @@ def dp_transformer_training_pipeline(
     #preprocessing_module_step.runsettings.configure(target="lin-gpu-6")
     #preprocessed_data = preprocessing_module_step.outputs.output_data
 
-    dp_module_step = dp_module(
+    split_module_step = split_module(
         training_data=preprocessing_module_step.outputs.output_dir
     )
 
+    dp_module_step = dp_module(
+        training_data=split_module_step.outputs.output_dir
+    )
+
     generation_module_step = generation_module(
-        input_training_file=preprocessing_module_step.outputs.output_dir,
+        input_training_file=split_module_step.outputs.output_dir,
         model_name_or_path=dp_module_step.outputs.output_dir
     )
 

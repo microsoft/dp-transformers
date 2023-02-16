@@ -286,8 +286,10 @@ def main():
 
             for line in csv_reader:
                 #prompt = "\t".join([line[idx] for idx in label_column_index]) + "\n\n"
-                prompt = "Write an email with subject:"
+                #prompt = "Write an email with subject:"
+                prompt = f"Write an email with {line[-1]} attachments:"
                 prompt_counter[prompt] += 1
+        logger.info(f"prompt counter: {prompt_counter}", category=DataCategory.PUBLIC)
 
         ratio_generation_training = args.total_sequences / sum(prompt_counter.values())
         all_sequences = []

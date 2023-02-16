@@ -1,0 +1,42 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+$schema: https://componentsdk.azureedge.net/jsonschema/CommandComponent.json
+name: data_preprocess
+version: 0.0.19
+display_name: Preprocessing
+type: CommandComponent
+description: A preprocessing module
+tags: {category: Component Tutorial, contact: amldesigner@microsoft.com}
+inputs:
+  training_data:
+    type: uri_folder
+    description: Training data organized in the torchvision format/structure
+    optional: false
+outputs:
+  output_dir:
+    type: AnyDirectory
+    description: The output directory
+command: >-
+  python aml/read_data/main.py --training_data {inputs.training_data} --output_dir {outputs.output_dir}
+environment:
+  docker:
+    image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04:latest
+  conda:
+    conda_dependencies:
+      name: project_environment
+      channels:
+      - conda-forge
+      dependencies:
+      - pip=20.2
+      - python=3.7.9
+      - scikit-surprise=1.0.6
+      - pip:
+        - waitress==2.0.0
+        - azureml-designer-classic-modules==0.0.161
+        - https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.1.0/en_core_web_sm-2.1.0.tar.gz#egg=en_core_web_sm
+        - spacy==2.1.7
+        - shrike
+        - pyarrow==11.0.0
+        - pandas
+  os: Linux

@@ -62,13 +62,13 @@ def main(args):
     with open(out_file, 'w') as csvfile:
         csvwriter = csv.writer(csvfile)
 
-        csvwriter.writerow(["Subject", "UniqueBody"])
+        csvwriter.writerow(["Subject", "UniqueBody", 'HasAttachments'])
 
         for file in all_files:
             df = pd.read_parquet(file)
             for index, row in df.iterrows():
-                if row["Subject"] and row["UniqueBody"] and len(str(row["Subject"])) > 5 and len(str(row["UniqueBody"])) > 5:
-                    csvwriter.writerow([str(row["Subject"]), str(row["UniqueBody"])])
+                if row["Subject"] and row["UniqueBody"] and row["HasAttachments"] and len(str(row["HasAttachments"])) > 2 and len(str(row["Subject"])) > 5 and len(str(row["UniqueBody"])) > 5:
+                    csvwriter.writerow([str(row["Subject"]), str(row["UniqueBody"]), str(row["HasAttachments"])])
                     all_lines += 1
 
     logger.info(f"Total lines: {all_lines}", category=DataCategory.PUBLIC)

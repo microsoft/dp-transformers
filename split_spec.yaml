@@ -1,0 +1,48 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+$schema: https://componentsdk.azureedge.net/jsonschema/CommandComponent.json
+name: data_split
+version: 0.0.0
+display_name: "Data Split"
+type: CommandComponent
+description: A split data module
+tags: {category: Component Tutorial, contact: amldesigner@microsoft.com}
+
+inputs:
+  training_data:
+    type: uri_folder
+    description: Training data organized in the torchvision format/structure
+    optional: false
+outputs:
+  output_dir:
+    type: AnyDirectory
+    description: The output directory
+
+command: >-
+  python aml/sep_data/main.py --training_data {inputs.training_data} --output_dir {outputs.output_dir}
+
+environment:
+  docker:
+    image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04:latest
+  conda:
+    conda_dependencies:
+      name: project_environment
+      channels:
+      - conda-forge
+      dependencies:
+      - pip=20.2
+      - python=3.7.9
+      - pip:
+        - shrike
+        - pyarrow==11.0.0
+        - pandas
+        - opacus==1.1.3
+        - torch==1.12.1
+        - transformers==4.20.1
+        - datasets==2.0.0
+        - opacus==1.1.3
+        - prv-accountant<0.2.0
+        - scikit-learn
+        - dp-transformers
+  os: Linux

@@ -125,8 +125,9 @@ def main(args: Arguments):
 
     # Load data
     # data_path = "C:\\Users\\huinan\\OneDrive - Microsoft\\Desktop\\dp-transformers\\examples\\nlg-reddit\\sample-level-dp\\tiny.csv"
-    data_path = os.path.join(args.model.training_data, "train.csv") 
-    dataset = datasets.load_dataset('csv', data_files={'train': data_path, 'validation': data_path}) #.train_test_split(0.2, seed=args.train.seed)
+    data_path_train = os.path.join(args.model.training_data, "train.csv")
+    data_path_val = os.path.join(args.model.training_data, "val.csv")
+    dataset = datasets.load_dataset('csv', data_files={'train': data_path_train, 'validation': data_path_val}) #.train_test_split(0.2, seed=args.train.seed)
 
     # Load tokenizer
     tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name)
@@ -145,7 +146,7 @@ def main(args: Arguments):
         #     text = "\t".join([examples[name][t] for name in label_column_names]) + "\n\n" + examples['text'][t] + tokenizer.eos_token
         #     batch.append(text)
         for t in range(len(examples['Subject'])):
-            text = "Write an email with subject: " + examples['Subject'][t] + "\n\n" + examples['UniqueBody'][t] + tokenizer.eos_token
+            text = f"Write an email with {examples['HasAttachments'][t]} attachments: {examples['Subject'][t]} END END END {examples['UniqueBody'][t]} {tokenizer.eos_token}" 
             batch.append(text)
 
         result = tokenizer(batch, padding="max_length", truncation=True,
