@@ -20,7 +20,7 @@ outputs:
     description: The output directory
 
 command: >-
-  python aml/sep_data/main.py --training_data {inputs.training_data} --output_dir {outputs.output_dir}
+  python main.py --training_data {inputs.training_data} --output_dir {outputs.output_dir}
 
 environment:
   docker:
