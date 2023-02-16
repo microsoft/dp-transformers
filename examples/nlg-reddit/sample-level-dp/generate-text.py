@@ -117,6 +117,48 @@ def convert_model(checkpoint_path):
     #torch.save(state_dict, os.path.join(checkpoint_path, "pytorch_model.bin"))
     return state_dict
 
+# TODO
+# - Decouple generate_text from main into an isolated method
+# - Make generate_text return a single synthetically generated string
+# - generate_text inputs:
+#   - single prompt string
+def generate_text(args,model,prompt,tokenizer,seq_num,prompt_length):
+    ppls_cur = []
+    all_data = []
+
+    # for i in tqdm(range(seq_num // args.batch_size + 1)):
+
+    input_ids = torch.tensor(prompt, device=args.device).repeat(args.batch_size, 1)
+    output_sequences = model.generate(
+        input_ids=input_ids,
+        max_length=args.length,
+        temperature=args.temperature,
+        top_k=args.k,
+        top_p=args.p,
+        early_stopping=True,
+        repetition_penalty=args.repetition_penalty,
+        do_sample=args.do_sample,
+        num_return_sequences=2,#overgenerate to ensure we have enough non-empty generated sequences
+        no_repeat_ngram_size=2,
+    )
+
+    ppl1 = cal_perplexity(output_sequences, model)
+    ppls_cur.append(ppl1)
+
+    generated_sequences = tokenizer.batch_decode(output_sequences, skip_special_tokens=True,
+                                                    clean_up_tokenization_spaces=True)
+
+    for g in generated_sequences:
+        labels, seq = g[:prompt_length], g[prompt_length:]
+        seq = " ".join(seq.split())
+        labels = labels.strip().split("\t")
+        if seq:
+            all_data.append([seq]+labels)
+
+    # if len(all_data) >seq_num:
+    #     all_data = random.sample(all_data,seq_num)
+
+    return all_data,ppls_cur
 
 @prefix_stack_trace(keep_message=True)
 def main():
@@ -272,46 +314,46 @@ def main():
     # Read original dataset with Spark
     df_original = dataframe_utils.read_dataframe(spark,args.dataset_input_path,args.dataset_input_format,logger)
 
-    # TODO
-    # - Decouple generate_text from main into an isolated method
-    # - Make generate_text return a single synthetically generated string
-    # - generate_text inputs:
-    #   - single prompt string
-    def generate_text(prompt,seq_num,prompt_length):
-        ppls_cur = []
-        all_data = []
+    # # TODO
+    # # - Decouple generate_text from main into an isolated method
+    # # - Make generate_text return a single synthetically generated string
+    # # - generate_text inputs:
+    # #   - single prompt string
+    # def generate_text(prompt,seq_num,prompt_length):
+    #     ppls_cur = []
+    #     all_data = []
 
-        for i in tqdm(range(seq_num // args.batch_size + 1)):
-            input_ids = torch.tensor(prompt, device=args.device).repeat(args.batch_size, 1)
-            output_sequences = model.generate(
-                input_ids=input_ids,
-                max_length=args.length,
-                temperature=args.temperature,
-                top_k=args.k,
-                top_p=args.p,
-                early_stopping=True,
-                repetition_penalty=args.repetition_penalty,
-                do_sample=args.do_sample,
-                num_return_sequences=2,#overgenerate to ensure we have enough non-empty generated sequences
-                no_repeat_ngram_size=2,
-            )
+    #     for i in tqdm(range(seq_num // args.batch_size + 1)):
+    #         input_ids = torch.tensor(prompt, device=args.device).repeat(args.batch_size, 1)
+    #         output_sequences = model.generate(
+    #             input_ids=input_ids,
+    #             max_length=args.length,
+    #             temperature=args.temperature,
+    #             top_k=args.k,
+    #             top_p=args.p,
+    #             early_stopping=True,
+    #             repetition_penalty=args.repetition_penalty,
+    #             do_sample=args.do_sample,
+    #             num_return_sequences=2,#overgenerate to ensure we have enough non-empty generated sequences
+    #             no_repeat_ngram_size=2,
+    #         )
 
-            ppl1= cal_perplexity(output_sequences, model)
-            ppls_cur.append(ppl1)
+    #         ppl1= cal_perplexity(output_sequences, model)
+    #         ppls_cur.append(ppl1)
 
-            generated_sequences = tokenizer.batch_decode(output_sequences, skip_special_tokens=True,
-                                                         clean_up_tokenization_spaces=True)
+    #         generated_sequences = tokenizer.batch_decode(output_sequences, skip_special_tokens=True,
+    #                                                      clean_up_tokenization_spaces=True)
 
-            for g in generated_sequences:
-                labels, seq = g[:prompt_length], g[prompt_length:]
-                seq = " ".join(seq.split())
-                labels = labels.strip().split("\t")
-                if seq:
-                    all_data.append([seq]+labels)
+    #         for g in generated_sequences:
+    #             labels, seq = g[:prompt_length], g[prompt_length:]
+    #             seq = " ".join(seq.split())
+    #             labels = labels.strip().split("\t")
+    #             if seq:
+    #                 all_data.append([seq]+labels)
 
-        if len(all_data) >seq_num:
-            all_data = random.sample(all_data,seq_num)
-        return all_data,ppls_cur
+    #     if len(all_data) >seq_num:
+    #         all_data = random.sample(all_data,seq_num)
+    #     return all_data,ppls_cur
 
     with torch.no_grad():
         prompt_counter = collections.Counter()
