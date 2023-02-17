@@ -319,9 +319,9 @@ def main():
         count = 0
         for obj in all_sequences:
             if obj[0]: # remove empty sequences
-                if "False" or "false" in obj[1]:
+                if "False" in obj[1] or "false" in obj[1]:
                     csv_writer.writerow([count, obj[0], obj[0], "False"])
-                elif "True" or "true" in obj[1]:
+                elif "True" in obj[1] or "true" in obj[1]:
                     csv_writer.writerow([count, obj[0], obj[0], "True"])
                 else:
                     raise ValueError("Invalid label")
