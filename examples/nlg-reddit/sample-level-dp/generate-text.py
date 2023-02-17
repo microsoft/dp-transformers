@@ -29,8 +29,15 @@ import shrike
 from shrike.compliant_logging.exceptions import prefix_stack_trace
 from shrike.compliant_logging.constants import DataCategory
 from pyspark.sql import SparkSession
+from pyspark.context import SparkContext
 import dataframe_utils
-import column_transformer
+import string
+import pyspark
+from pyspark.sql.types import StringType
+from pyspark.sql.functions import udf
+from pyspark.sql import functions as F
+from pyspark.sql.dataframe import DataFrame
+from pyspark.sql.functions import col
 
 shrike.compliant_logging.enable_compliant_logging(
         "SystemLog:",
@@ -82,7 +89,6 @@ def set_seed(args):
     if args.n_gpu > 0:
         torch.cuda.manual_seed_all(args.seed)
 
-
 def cal_perplexity(encodings, cur_model):
     max_length = cur_model.config.n_positions
     stride = 512
@@ -117,17 +123,16 @@ def convert_model(checkpoint_path):
     #torch.save(state_dict, os.path.join(checkpoint_path, "pytorch_model.bin"))
     return state_dict
 
-# TODO
-# - Decouple generate_text from main into an isolated method
-# - Make generate_text return a single synthetically generated string
-# - generate_text inputs:
-#   - single prompt string
-def generate_text(args,model,prompt,tokenizer,seq_num,prompt_length):
+# # TODO
+# # - Decouple generate_text from main into an isolated method
+# # - Make generate_text return a single synthetically generated string
+# # - generate_text inputs:
+# #   - single prompt string
+def generate_text(args,model,tokenizer,prompt):
     ppls_cur = []
     all_data = []
 
     # for i in tqdm(range(seq_num // args.batch_size + 1)):
-
     input_ids = torch.tensor(prompt, device=args.device).repeat(args.batch_size, 1)
     output_sequences = model.generate(
         input_ids=input_ids,
@@ -159,6 +164,32 @@ def generate_text(args,model,prompt,tokenizer,seq_num,prompt_length):
     #     all_data = random.sample(all_data,seq_num)
 
     return all_data,ppls_cur
+
+# Column transformation methods
+def generate_unique_body(subject:str, has_attachments: str, importance: str) -> str:
+    prompt_text = 'Write Email UniqueBody with Subject ' + subject + ', HasAttachements ' + has_attachments + ' and Importance ' + importance + '.'
+    # TODO - Add call to GPT method
+    return prompt_text
+
+# def generate_body_preview(unique_body:str) -> str:
+#     if(len(unique_body) <= 255):
+#         return unique_body 
+#     else:
+#         return unique_body[0:255]
+
+# # User Defined Functions
+# udf_gpt_unique_body = F.udf(generate_unique_body, StringType())
+# udf_gpt_body_preview = F.udf(generate_body_preview, StringType())
+
+# def get_dataframe_gpt_unique_body(df: DataFrame) -> DataFrame:
+#     df_decorated = df.withColumn("UniqueBody", udf_gpt_unique_body('Subject','HasAttachments','Importance')).withColumn("BodyPreview",udf_gpt_body_preview('UniqueBody'))
+#     return df_decorated
+
+prompt_base_strinc_bc = None
+model_args_dictionary_bc = None
+prompt_base_bc = None
+tokenizer_bc = None
+model_bc = None
 
 @prefix_stack_trace(keep_message=True)
 def main():
@@ -296,11 +327,10 @@ def main():
 
     logger.info(args, category=DataCategory.PUBLIC)
 
-    # Initialize prompt string
+    # Initialize prompt column list
     prompt_columns_list = args.prompt_columns.replace(" ", "").split(',')
-    prompt_string = args.prompt_string.format(*prompt_columns_list)
     logger.info(f"Prompt columns: {prompt_columns_list}",category=DataCategory.PUBLIC)
-    logger.info(f"Prompt string: {prompt_string}",category=DataCategory.PUBLIC)
+    logger.info(f"Prompt string: {args.prompt_string}",category=DataCategory.PUBLIC)
 
     # Initialize Spark
     logger.info(f"Initializing Spark Session",category=DataCategory.PUBLIC)
@@ -310,9 +340,43 @@ def main():
     spark.conf.set("spark.sql.legacy.parquet.int96RebaseModeInWrite", "CORRECTED")
     spark.conf.set("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "CORRECTED")
     spark.conf.set("spark.sql.legacy.parquet.datetimeRebaseModeInWrite", "CORRECTED")
+    sc = SparkContext.getOrCreate()
+
+    # Broadcast variables
+    logger.info(f"Broadcasting prompt base string",category=DataCategory.PUBLIC)
+    global prompt_base_strinc_bc
+    prompt_base_strinc_bc = sc.broadcast(args.prompt_string)
+    logger.info(f"Broadcasting model args dictionary",category=DataCategory.PUBLIC)
+    model_args_dictionary = {
+        'device': args.device,
+        'batch_size': args.batch_size,
+        'length': args.length,
+        'temperature': args.temperature,
+        'k': args.k,
+        'p': args.p,
+        'repetition_penalty': args.repetition_penalty,
+        'do_sample': args.do_sample
+        }
+    global model_args_dictionary_bc
+    model_args_dictionary_bc = sc.broadcast(tokenizer)
+    logger.info(f"Broadcasting prompt string",category=DataCategory.PUBLIC)
+    global prompt_base_bc
+    prompt_base_bc = sc.broadcast(str(args.prompt_string))
+    logger.info(f"Broadcasting tokenizer",category=DataCategory.PUBLIC)
+    global tokenizer_bc
+    tokenizer_bc = sc.broadcast(tokenizer)
+    logger.info(f"Broadcasting model",category=DataCategory.PUBLIC)
+    global model_bc
+    model_bc = sc.broadcast(model)
 
     # Read original dataset with Spark
     df_original = dataframe_utils.read_dataframe(spark,args.dataset_input_path,args.dataset_input_format,logger)
+
+    # Synthetically generate Email UniqueBody column and replace original column using Spark UDFs
+    df_synthetic = df_original
+
+    # Write dataset with synthetically generated colum
+    dataframe_utils.write_dataframe(df_synthetic,args.output_dir,args.output_format,args.output_partitions,logger)
 
     # # TODO
     # # - Decouple generate_text from main into an isolated method

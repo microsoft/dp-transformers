@@ -6,14 +6,8 @@ from pyspark.sql import functions as F
 from pyspark.sql.dataframe import DataFrame
 from pyspark.sql.functions import col
 
-def generate_unique_body(
-    subject: string,
-    has_attachments: string,
-    importance: string,
-    inference_classification: string,
-    unsubscribe_enabled: string) -> string:
-    prompt_text = 'Write Email Body with Subject ' + subject + ', HasAttachements ' + has_attachments + \
-    ', Importance ' + importance + ', InferenceClassification ' + inference_classification + ' and UnsubscribeEnabled ' + unsubscribe_enabled + '.'
+def generate_unique_body(subject: str, has_attachments: str, importance: str) -> str:
+    prompt_text = 'Write UniqueBody with Subject ' + subject + ', HasAttachements ' + has_attachments + ' and Importance ' + importance + '.'
     generated_text = prompt_text # TODO - Add call to GTP method
     return generated_text
 

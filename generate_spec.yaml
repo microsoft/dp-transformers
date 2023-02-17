@@ -57,9 +57,15 @@ inputs:
     default: 0.0
 
 # Prompt arguments
+  prompt_columns:
+    type: String
+    default: Subject,Importance,HasAttachments
+    description: Column names to be used on prompt generation. Will be transformed in a list of strings list[str].
+    optional: false
+
   prompt_string:
     type: String
-    default: "Create email UniqueBody with Subject {}, Importance {} and HasAttachments {}"
+    default: "Create email UniqueBody with Subject {}, with Importance {} and HasAttachments is {}"
     description: Prompt base string for prompt generation. Prompt will be formed from 'prompt_base_string.format(*prompt_columns_list)'
     optional: false
 
