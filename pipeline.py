@@ -21,8 +21,10 @@ ws = Workspace.get(name=aml_config['workspace_name'], subscription_id=aml_config
 #ws = Workspace.from_config() # if you have config.json in the same folder
 
 #preprocessing_module = Component.load(name="data_preprocess", version="0.0.19", workspace=ws)
-preprocessing_module = Component.from_yaml(yaml_file="preprocess_spec.yaml")
-split_module = Component.from_yaml(yaml_file="split_spec.yaml")
+preprocessing_module = Component.load(name="data_preprocess_HasAttachments", version="0.0.0", workspace=ws)
+#preprocessing_module = Component.from_yaml(yaml_file="preprocess_spec.yaml")
+split_module = Component.load(name="data_split", version="0.0.0", workspace=ws)
+#split_module = Component.from_yaml(yaml_file="split_spec.yaml")
 dp_module = Component.from_yaml(yaml_file="train_spec.yaml")
 generation_module = Component.from_yaml(yaml_file="generate_spec.yaml")
 classification_module = Component.from_yaml(yaml_file="classification_spec.yaml")
@@ -56,7 +58,6 @@ def dp_transformer_training_pipeline(
         validation_file=split_module_step.outputs.output_dir,
         test_file=split_module_step.outputs.output_dir
     )
-
 
     dp_module_step = dp_module(
         training_data=split_module_step.outputs.output_dir

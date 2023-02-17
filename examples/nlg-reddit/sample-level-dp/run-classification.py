@@ -20,6 +20,51 @@ import logging
 import os
 import random
 import sys
+
+import logging
+import shrike
+from shrike.compliant_logging.exceptions import prefix_stack_trace
+from shrike.compliant_logging.constants import DataCategory
+
+shrike.compliant_logging.enable_compliant_logging(
+        "SystemLog:",
+        level="INFO",
+        format="%(prefix)s%(levelname)s:%(name)s:%(message)s",
+    )
+
+class CompliantLoggerHack(shrike.compliant_logging.logging.CompliantLogger):
+
+    def _log(
+        self,
+        level,
+        msg,
+        args=None,
+        exc_info=None,
+        extra=None,
+        stack_info=False,
+        stacklevel=1,
+        items=None,
+        category=DataCategory.PRIVATE,
+    ):
+        super()._log(
+            level,
+            "SystemLog: " + msg,
+            args,
+            exc_info,
+            extra,
+            stack_info,
+            stacklevel,
+            items,
+            category,
+        )
+
+logging.setLoggerClass(CompliantLoggerHack)
+logger = logging.getLogger(__name__)
+logger.info("Hello, world!", category=DataCategory.PUBLIC)
+
+
+
+
 from dataclasses import dataclass, field
 from typing import Optional
 from numpy import expand_dims
@@ -147,22 +192,22 @@ class DataTrainingArguments:
     )
     test_file: Optional[str] = field(default=None, metadata={"help": "A csv or a json file containing the test data."})
 
-    def __post_init__(self):
-        if self.task_name is not None:
-            self.task_name = self.task_name.lower()
-            if self.task_name not in task_to_keys.keys():
-                raise ValueError("Unknown task, you should pick one in " + ",".join(task_to_keys.keys()))
-        elif self.dataset_name is not None:
-            pass
-        elif self.train_file is None or self.validation_file is None:
-            raise ValueError("Need either a GLUE task, a training/validation file or a dataset name.")
-        else:
-            train_extension = self.train_file.split(".")[-1]
-            assert train_extension in ["csv", "json"], "`train_file` should be a csv or a json file."
-            validation_extension = self.validation_file.split(".")[-1]
-            assert (
-                validation_extension == train_extension
-            ), "`validation_file` should have the same extension (csv or json) as `train_file`."
+    # def __post_init__(self):
+    #     if self.task_name is not None:
+    #         self.task_name = self.task_name.lower()
+    #         if self.task_name not in task_to_keys.keys():
+    #             raise ValueError("Unknown task, you should pick one in " + ",".join(task_to_keys.keys()))
+    #     elif self.dataset_name is not None:
+    #         pass
+    #     elif self.train_file is None or self.validation_file is None:
+    #         raise ValueError("Need either a GLUE task, a training/validation file or a dataset name.")
+    #     else:
+    #         train_extension = self.train_file.split(".")[-1]
+    #         assert train_extension in ["csv", "json"], "`train_file` should be a csv or a json file."
+    #         validation_extension = self.validation_file.split(".")[-1]
+    #         assert (
+    #             validation_extension == train_extension
+    #         ), "`validation_file` should have the same extension (csv or json) as `train_file`."
 
 
 @dataclass
@@ -227,26 +272,27 @@ def main():
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    # Setup logging
-    logging.basicConfig(
-        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-        datefmt="%m/%d/%Y %H:%M:%S",
-        handlers=[logging.StreamHandler(sys.stdout)],
-    )
+    # # Setup logging
+    # logging.basicConfig(
+    #     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    #     datefmt="%m/%d/%Y %H:%M:%S",
+    #     handlers=[logging.StreamHandler(sys.stdout)],
+    # )
 
-    log_level = training_args.get_process_log_level()
-    logger.setLevel(log_level)
-    datasets.utils.logging.set_verbosity(log_level)
-    transformers.utils.logging.set_verbosity(log_level)
-    transformers.utils.logging.enable_default_handler()
-    transformers.utils.logging.enable_explicit_format()
+    # log_level = training_args.get_process_log_level()
+    # logger.setLevel(log_level)
+    # datasets.utils.logging.set_verbosity(log_level)
+    # transformers.utils.logging.set_verbosity(log_level)
+    # transformers.utils.logging.enable_default_handler()
+    # transformers.utils.logging.enable_explicit_format()
 
     # Log on each process the small summary:
     logger.warning(
         f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
-        + f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
+        + f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}",
+        category=DataCategory.PUBLIC
     )
-    logger.info(f"Training/evaluation parameters {training_args}")
+    logger.info(f"Training/evaluation parameters {training_args}", category=DataCategory.PUBLIC)
 
     # Detecting last checkpoint.
     last_checkpoint = None
@@ -319,35 +365,42 @@ def main():
         # when you use `do_predict` without specifying a GLUE benchmark task.
         if training_args.do_predict:
             if data_args.test_file is not None:
-                train_extension = data_args.train_file.split(".")[-1]
-                test_extension = data_args.test_file.split(".")[-1]
-                assert (
-                    test_extension == train_extension
-                ), "`test_file` should have the same extension (csv or json) as `train_file`."
+                # train_extension = data_args.train_file.split(".")[-1]
+                # test_extension = data_args.test_file.split(".")[-1]
+                # assert (
+                #     test_extension == train_extension
+                # ), "`test_file` should have the same extension (csv or json) as `train_file`."
                 data_files["test"] = os.path.join(data_args.test_file, "test.csv")
             else:
                 raise ValueError("Need either a GLUE task or a test file for `do_predict`.")
 
         for key in data_files.keys():
-            logger.info(f"load a local file for {key}: {data_files[key]}")
+            logger.info(f"load a local file for {key}: {data_files[key]}", category=DataCategory.PUBLIC)
 
-        if data_args.train_file.endswith(".csv"):
-            # Loading a dataset from local csv files
-            raw_datasets = load_dataset(
+        raw_datasets = load_dataset(
                 "csv",
                 data_files=data_files,
                 cache_dir=model_args.cache_dir,
                 use_auth_token=True if model_args.use_auth_token else None,
             )
 
-        else:
-            # Loading a dataset from local json files
-            raw_datasets = load_dataset(
-                "json",
-                data_files=data_files,
-                cache_dir=model_args.cache_dir,
-                use_auth_token=True if model_args.use_auth_token else None,
-            )
+        # if data_args.train_file.endswith(".csv"):
+        #     # Loading a dataset from local csv files
+        #     raw_datasets = load_dataset(
+        #         "csv",
+        #         data_files=data_files,
+        #         cache_dir=model_args.cache_dir,
+        #         use_auth_token=True if model_args.use_auth_token else None,
+        #     )
+
+        # else:
+        #     # Loading a dataset from local json files
+        #     raw_datasets = load_dataset(
+        #         "json",
+        #         data_files=data_files,
+        #         cache_dir=model_args.cache_dir,
+        #         use_auth_token=True if model_args.use_auth_token else None,
+        #     )
     # See more about loading any type of standard or custom dataset at
     # https://huggingface.co/docs/datasets/loading_datasets.html.
     if not data_args.label_column_name:
@@ -443,7 +496,7 @@ def main():
             logger.warning(
                 "Your model seems to have been trained with labels, but they don't match the dataset: ",
                 f"model labels: {list(sorted(label_name_to_id.keys()))}, dataset labels: {list(sorted(label_list))}."
-                "\nIgnoring the model labels as a result.",
+                "\nIgnoring the model labels as a result.", category=DataCategory.PUBLIC
             )
     elif data_args.task_name is None and not is_regression:
         label_to_id = {v: i for i, v in enumerate(label_list)}
@@ -458,7 +511,7 @@ def main():
     if data_args.max_seq_length > tokenizer.model_max_length:
         logger.warning(
             f"The max_seq_length passed ({data_args.max_seq_length}) is larger than the maximum length for the"
-            f"model ({tokenizer.model_max_length}). Using max_seq_length={tokenizer.model_max_length}."
+            f"model ({tokenizer.model_max_length}). Using max_seq_length={tokenizer.model_max_length}.", category=DataCategory.PUBLIC
         )
     max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
 
@@ -469,14 +522,12 @@ def main():
         # )
         # result = tokenizer(*args, padding=padding, max_length=max_seq_length, truncation=True)
         batch = []
-        if 'Subject' in examples:
-            for t in range(len(examples['Subject'])):
-                text = f"{examples['Subject'][t]} END END END {examples['UniqueBody'][t]}" 
-                batch.append(text)
-        elif 'Subject_UniqueBody' in examples:
-            for t in range(len(examples['Subject_UniqueBody'])):
-                text = f"{examples['Subject_UniqueBody'][t]}" 
-                batch.append(text)
+        for t in range(len(examples['Subject'])):
+            if examples['Subject'][t] == examples['UniqueBody'][t]:
+                text = f"{examples['Subject'][t]}"   # in synthetic case the subject and body are duplicated in their columns
+            else:
+                text = f"{examples['Subject'][t]} {examples['UniqueBody'][t]}" # the original case
+            batch.append(text)
         
         result = tokenizer(batch, padding=padding, max_length=max_seq_length, truncation=True)
 
@@ -519,7 +570,7 @@ def main():
     # Log a few random samples from the training set:
     if training_args.do_train:
         for index in random.sample(range(len(train_dataset)), 3):
-            logger.info(f"Sample {index} of the training set: {train_dataset[index]}.")
+            logger.info(f"Sample {index} of the training set: {train_dataset[index]}.", category=DataCategory.PUBLIC)
 
     # Get the metric function
     if data_args.task_name is not None:
@@ -614,7 +665,7 @@ def main():
 
     # Evaluation
     if training_args.do_eval:
-        logger.info("*** Evaluate ***")
+        logger.info("*** Evaluate ***", category=DataCategory.PUBLIC)
 
         # Loop to handle MNLI double evaluation (matched, mis-matched)
         tasks = [data_args.task_name]
@@ -641,7 +692,7 @@ def main():
             trainer.save_metrics("eval", combined if task is not None and "mnli" in task else metrics)
 
     if training_args.do_predict:
-        logger.info("*** Predict ***")
+        logger.info("*** Predict ***", category=DataCategory.PUBLIC)
 
         # Loop to handle MNLI double evaluation (matched, mis-matched)
         tasks = [data_args.task_name]
@@ -663,7 +714,7 @@ def main():
             output_predict_file = os.path.join(training_args.output_dir, f"predict_results_{task}.txt")
             if trainer.is_world_process_zero():
                 with open(output_predict_file, "w") as writer:
-                    logger.info(f"***** Predict results {task} *****")
+                    logger.info(f"***** Predict results {task} *****", category=DataCategory.PUBLIC)
                     writer.write("index\tprediction\n")
                     for index, item in enumerate(predictions):
                         if is_regression:

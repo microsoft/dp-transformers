@@ -146,7 +146,7 @@ def main(args: Arguments):
         #     text = "\t".join([examples[name][t] for name in label_column_names]) + "\n\n" + examples['text'][t] + tokenizer.eos_token
         #     batch.append(text)
         for t in range(len(examples['Subject'])):
-            text = f"Write an email with {examples['HasAttachments'][t]} attachments: {examples['Subject'][t]} END END END {examples['UniqueBody'][t]} {tokenizer.eos_token}" 
+            text = f"Write an email with {examples['HasAttachments'][t]} attachments: {examples['Subject'][t]} {examples['UniqueBody'][t]} {tokenizer.eos_token}" 
             batch.append(text)
 
         result = tokenizer(batch, padding="max_length", truncation=True,

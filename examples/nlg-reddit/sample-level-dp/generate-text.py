@@ -315,15 +315,17 @@ def main():
     with open(output_path, 'w', newline='', encoding="utf-8") as wf:
         csv_writer = csv.writer(wf)
         #csv_writer.writerow(title)
-        csv_writer.writerow(["Subject_UniqueBody", "HasAttachments"])
+        csv_writer.writerow(["Unnamed: 0", "Subject", "UniqueBody", "HasAttachments"])
+        count = 0
         for obj in all_sequences:
             if obj[0]: # remove empty sequences
-                if "False" in obj[1]:
-                    csv_writer.writerow([obj[0], "False"])
-                elif "True" in obj[1]:
-                    csv_writer.writerow([obj[0], "True"])
+                if "False" or "false" in obj[1]:
+                    csv_writer.writerow([count, obj[0], obj[0], "False"])
+                elif "True" or "true" in obj[1]:
+                    csv_writer.writerow([count, obj[0], obj[0], "True"])
                 else:
                     raise ValueError("Invalid label")
+                count += 1
 
 if __name__ == "__main__":
     main()

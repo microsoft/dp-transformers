@@ -1,8 +1,8 @@
-$schema: http://azureml/sdk-1-5/DistributedComponent.json
+$schema: https://componentsdk.azureedge.net/jsonschema/CommandComponent.json
 name: microsoft.fhl.transformers.dp.finetune.classification
 version: 0.0.0
 display_name: "dp-transformers-classification"
-type: DistributedComponent
+type: CommandComponent
 description: >-
   https://github.com/microsoft/dp-transformers/
 
@@ -31,13 +31,13 @@ inputs:
       - roberta-base
       - roberta-large
 
-  sequence_len:
+  max_seq_length:
     type: Integer
     default: 256
 
   per_device_train_batch_size:
     type: Integer
-    default: 4
+    default: 32
 
   evaluation_strategy:
     type: String
@@ -49,11 +49,15 @@ inputs:
 
   save_strategy:
     type: String
-    default: steps  
+    default: steps 
+
+  save_steps:
+    type: Integer
+    default: 20 
 
   per_device_eval_batch_size:
     type: Integer
-    default: 4    
+    default: 64    
 
   num_train_epochs:
     type: Integer
@@ -76,20 +80,18 @@ outputs:
     type: AnyDirectory
     description: "output_dir"
 
-launcher:
-  type: mpi
-  additional_arguments: >-
-    python -m torch.distributed.run 
-    --nproc_per_node 8 examples/nlg-reddit/sample-level-dp/run-classification.py
+command: >-
+    python examples/nlg-reddit/sample-level-dp/run-classification.py
     --train_file {inputs.train_file}
     --validation_file {inputs.validation_file}
     --test_file {inputs.test_file}
     --label_column_name {inputs.label_column_name}
     --model_name_or_path {inputs.model_name_or_path}
-    --sequence_len {inputs.sequence_len}
+    --max_seq_length {inputs.max_seq_length}
     --per_device_train_batch_size {inputs.per_device_train_batch_size}
     --evaluation_strategy {inputs.evaluation_strategy}
     --eval_steps {inputs.eval_steps}
+    --save_steps {inputs.save_steps}
     --save_strategy {inputs.save_strategy}
     --per_device_eval_batch_size {inputs.per_device_eval_batch_size}
     --num_train_epochs {inputs.num_train_epochs}
