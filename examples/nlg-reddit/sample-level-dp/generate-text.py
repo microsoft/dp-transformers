@@ -17,7 +17,6 @@
 """ Conditional text generation with the auto-regressive models of the library (GPT/GPT-2/CTRL/Transformer-XL/XLNet)
 """
 
-
 import argparse
 import collections
 import sys
@@ -128,48 +127,48 @@ def convert_model(checkpoint_path):
 # # - Make generate_text return a single synthetically generated string
 # # - generate_text inputs:
 # #   - single prompt string
-def generate_text(args,model,tokenizer,prompt):
-    ppls_cur = []
-    all_data = []
+# def generate_text(args,model,tokenizer,prompt):
+#     ppls_cur = []
+#     all_data = []
 
-    # for i in tqdm(range(seq_num // args.batch_size + 1)):
-    input_ids = torch.tensor(prompt, device=args.device).repeat(args.batch_size, 1)
-    output_sequences = model.generate(
-        input_ids=input_ids,
-        max_length=args.length,
-        temperature=args.temperature,
-        top_k=args.k,
-        top_p=args.p,
-        early_stopping=True,
-        repetition_penalty=args.repetition_penalty,
-        do_sample=args.do_sample,
-        num_return_sequences=2,#overgenerate to ensure we have enough non-empty generated sequences
-        no_repeat_ngram_size=2,
-    )
+#     # for i in tqdm(range(seq_num // args.batch_size + 1)):
+#     input_ids = torch.tensor(prompt, device=args.device).repeat(args.batch_size, 1)
+#     output_sequences = model.generate(
+#         input_ids=input_ids,
+#         max_length=args.length,
+#         temperature=args.temperature,
+#         top_k=args.k,
+#         top_p=args.p,
+#         early_stopping=True,
+#         repetition_penalty=args.repetition_penalty,
+#         do_sample=args.do_sample,
+#         num_return_sequences=2,#overgenerate to ensure we have enough non-empty generated sequences
+#         no_repeat_ngram_size=2,
+#     )
 
-    ppl1 = cal_perplexity(output_sequences, model)
-    ppls_cur.append(ppl1)
+#     ppl1 = cal_perplexity(output_sequences, model)
+#     ppls_cur.append(ppl1)
 
-    generated_sequences = tokenizer.batch_decode(output_sequences, skip_special_tokens=True,
-                                                    clean_up_tokenization_spaces=True)
+#     generated_sequences = tokenizer.batch_decode(output_sequences, skip_special_tokens=True,
+#                                                     clean_up_tokenization_spaces=True)
 
-    for g in generated_sequences:
-        labels, seq = g[:prompt_length], g[prompt_length:]
-        seq = " ".join(seq.split())
-        labels = labels.strip().split("\t")
-        if seq:
-            all_data.append([seq]+labels)
+#     for g in generated_sequences:
+#         labels, seq = g[:prompt_length], g[prompt_length:]
+#         seq = " ".join(seq.split())
+#         labels = labels.strip().split("\t")
+#         if seq:
+#             all_data.append([seq]+labels)
 
-    # if len(all_data) >seq_num:
-    #     all_data = random.sample(all_data,seq_num)
+#     # if len(all_data) >seq_num:
+#     #     all_data = random.sample(all_data,seq_num)
 
-    return all_data,ppls_cur
+#     return all_data,ppls_cur
 
-# Column transformation methods
-def generate_unique_body(subject:str, has_attachments: str, importance: str) -> str:
-    prompt_text = 'Write Email UniqueBody with Subject ' + subject + ', HasAttachements ' + has_attachments + ' and Importance ' + importance + '.'
-    # TODO - Add call to GPT method
-    return prompt_text
+# # Column transformation methods
+# def generate_unique_body(subject:str, has_attachments: str, importance: str) -> str:
+#     prompt_text = 'Write Email UniqueBody with Subject ' + subject + ', HasAttachements ' + has_attachments + ' and Importance ' + importance + '.'
+#     # TODO - Add call to GPT method
+#     return prompt_text
 
 # def generate_body_preview(unique_body:str) -> str:
 #     if(len(unique_body) <= 255):
@@ -340,12 +339,17 @@ def main():
     spark.conf.set("spark.sql.legacy.parquet.int96RebaseModeInWrite", "CORRECTED")
     spark.conf.set("spark.sql.legacy.parquet.datetimeRebaseModeInRead", "CORRECTED")
     spark.conf.set("spark.sql.legacy.parquet.datetimeRebaseModeInWrite", "CORRECTED")
-    sc = SparkContext.getOrCreate()
+
+    # Read original dataset with Spark
+    df_original = dataframe_utils.read_dataframe(spark,args.dataset_input_path,args.dataset_input_format,logger)
+    row_count = df_original.count()
+    logger.info(f"df_original row count: {row_count}",category=DataCategory.PUBLIC)
 
     # Broadcast variables
+    sparkContext = SparkContext.getOrCreate()
     logger.info(f"Broadcasting prompt base string",category=DataCategory.PUBLIC)
     global prompt_base_strinc_bc
-    prompt_base_strinc_bc = sc.broadcast(args.prompt_string)
+    prompt_base_strinc_bc = sparkContext.broadcast(args.prompt_string)
     logger.info(f"Broadcasting model args dictionary",category=DataCategory.PUBLIC)
     model_args_dictionary = {
         'device': args.device,
@@ -358,25 +362,24 @@ def main():
         'do_sample': args.do_sample
         }
     global model_args_dictionary_bc
-    model_args_dictionary_bc = sc.broadcast(tokenizer)
+    model_args_dictionary_bc = sparkContext.broadcast(model_args_dictionary)
     logger.info(f"Broadcasting prompt string",category=DataCategory.PUBLIC)
     global prompt_base_bc
-    prompt_base_bc = sc.broadcast(str(args.prompt_string))
+    prompt_base_bc = sparkContext.broadcast(str(args.prompt_string))
     logger.info(f"Broadcasting tokenizer",category=DataCategory.PUBLIC)
     global tokenizer_bc
-    tokenizer_bc = sc.broadcast(tokenizer)
+    tokenizer_bc = sparkContext.broadcast(tokenizer)
     logger.info(f"Broadcasting model",category=DataCategory.PUBLIC)
     global model_bc
-    model_bc = sc.broadcast(model)
+    model_bc = sparkContext.broadcast(model)
 
-    # Read original dataset with Spark
-    df_original = dataframe_utils.read_dataframe(spark,args.dataset_input_path,args.dataset_input_format,logger)
+    spark.stop()
 
-    # Synthetically generate Email UniqueBody column and replace original column using Spark UDFs
-    df_synthetic = df_original
+    # # Synthetically generate Email UniqueBody column and replace original column using Spark UDFs
+    # df_synthetic = df_original
 
-    # Write dataset with synthetically generated colum
-    dataframe_utils.write_dataframe(df_synthetic,args.output_dir,args.output_format,args.output_partitions,logger)
+    # # Write dataset with synthetically generated colum
+    # dataframe_utils.write_dataframe(df_synthetic,args.output_dir,args.output_format,args.output_partitions,logger)
 
     # # TODO
     # # - Decouple generate_text from main into an isolated method
@@ -419,46 +422,46 @@ def main():
     #         all_data = random.sample(all_data,seq_num)
     #     return all_data,ppls_cur
 
-    with torch.no_grad():
-        prompt_counter = collections.Counter()
-        data_path = os.path.join(args.input_training_file, "train.csv")
-        with open(data_path, encoding='utf-8') as rf:
-            csv_reader = csv.reader(rf)
-            title = next(csv_reader)
+    # with torch.no_grad():
+    #     prompt_counter = collections.Counter()
+    #     data_path = os.path.join(args.input_training_file, "train.csv")
+    #     with open(data_path, encoding='utf-8') as rf:
+    #         csv_reader = csv.reader(rf)
+    #         title = next(csv_reader)
 
-            #label_column_index = [i for i,name in enumerate(title) if "label" in name]
+    #         #label_column_index = [i for i,name in enumerate(title) if "label" in name]
 
-            for line in csv_reader:
-                #prompt = "\t".join([line[idx] for idx in label_column_index]) + "\n\n"
-                prompt = "Write an email with subject:"
-                prompt_counter[prompt] += 1
+    #         for line in csv_reader:
+    #             #prompt = "\t".join([line[idx] for idx in label_column_index]) + "\n\n"
+    #             prompt = "Write an email with subject:"
+    #             prompt_counter[prompt] += 1
 
-        ratio_generation_training = args.total_sequences / sum(prompt_counter.values())
-        all_sequences = []
-        ppls_cur = []
+    #     ratio_generation_training = args.total_sequences / sum(prompt_counter.values())
+    #     all_sequences = []
+    #     ppls_cur = []
 
-        for prompt_text in tqdm(prompt_counter):
-            prompt = tokenizer(prompt_text)['input_ids']
-            num_seq_to_generate = round(prompt_counter[prompt_text] * ratio_generation_training)
-            if num_seq_to_generate>0:
-                sequences, ppls = generate_text(prompt, num_seq_to_generate, len(prompt_text))
-                all_sequences += sequences
-                ppls_cur += ppls
+    #     for prompt_text in tqdm(prompt_counter):
+    #         prompt = tokenizer(prompt_text)['input_ids']
+    #         num_seq_to_generate = round(prompt_counter[prompt_text] * ratio_generation_training)
+    #         if num_seq_to_generate>0:
+    #             sequences, ppls = generate_text(prompt, num_seq_to_generate, len(prompt_text))
+    #             all_sequences += sequences
+    #             ppls_cur += ppls
 
-    logger.info(f"Current PPL: %.2f±%.2f", np.mean(ppls_cur),np.std(ppls_cur), category=DataCategory.PUBLIC)
-    logger.info(f"Total generated sequences: %d", len(all_sequences), category=DataCategory.PUBLIC)
-    random.shuffle(all_sequences)
+    # logger.info(f"Current PPL: %.2f±%.2f", np.mean(ppls_cur),np.std(ppls_cur), category=DataCategory.PUBLIC)
+    # logger.info(f"Total generated sequences: %d", len(all_sequences), category=DataCategory.PUBLIC)
+    # random.shuffle(all_sequences)
 
-    #prefix = list(filter(None, args.model_name_or_path.split("/"))).pop()
-    os.makedirs(args.output_dir, exist_ok=True)
-    output_path = os.path.join(args.output_dir, str(args.length) + "." + str(args.seed) + ".generations.csv")
-    with open(output_path, 'w', newline='', encoding="utf-8") as wf:
-        csv_writer = csv.writer(wf)
-        #csv_writer.writerow(title)
-        csv_writer.writerow(["Subject_UniqueBody"])
-        for obj in all_sequences:
-            if obj[0]: # remove empty sequences
-                csv_writer.writerow([obj[0]])
+    # #prefix = list(filter(None, args.model_name_or_path.split("/"))).pop()
+    # os.makedirs(args.output_dir, exist_ok=True)
+    # output_path = os.path.join(args.output_dir, str(args.length) + "." + str(args.seed) + ".generations.csv")
+    # with open(output_path, 'w', newline='', encoding="utf-8") as wf:
+    #     csv_writer = csv.writer(wf)
+    #     #csv_writer.writerow(title)
+    #     csv_writer.writerow(["Subject_UniqueBody"])
+    #     for obj in all_sequences:
+    #         if obj[0]: # remove empty sequences
+    #             csv_writer.writerow([obj[0]])
 
 if __name__ == "__main__":
     main()

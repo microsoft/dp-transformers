@@ -2,9 +2,9 @@
 # Licensed under the MIT License.
 
 $schema: https://componentsdk.azureedge.net/jsonschema/CommandComponent.json
-name: microsoft.fhl.transformers.dp.generate
-version: 0.0.7
-display_name: "dp-transformers-generation"
+name: microsoft.fhl.transformers.dp.generate.column.transform
+version: 0.0.1
+display_name: "dp-transformers-generation-column-transform"
 type: CommandComponent
 description: >-
   https://github.com/microsoft/dp-transformers/
@@ -145,4 +145,5 @@ environment:
         - scikit-learn
         - dp-transformers
         - pyspark==3.1.1
+        - --index-url https://o365exchange.pkgs.visualstudio.com/_packaging/PolymerPythonPackages/pypi/simple/
   os: Linux
