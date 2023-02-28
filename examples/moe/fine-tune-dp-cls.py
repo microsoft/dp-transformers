@@ -159,7 +159,9 @@ def main(args: Arguments):
     dataset = data_process(args, tokenizer, dataset)
 
     # Load model
-    model = SwitchTransformersModelForSequenceClassification.from_pretrained(args.model.model_name, cache_dir=args.model.data_dir)
+    config = AutoConfig.from_pretrained(args.model.model_name)
+    config.dropout_rate = 0.0
+    model = SwitchTransformersModelForSequenceClassification.from_pretrained(args.model.model_name, config=config, cache_dir=args.model.data_dir)
     model = model.to(train_args.device)
 
     for index, block in enumerate(model.encoder.block):

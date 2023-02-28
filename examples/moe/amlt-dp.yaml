@@ -113,6 +113,7 @@ search:
         --learning_rate {learning_rate}
         --per_sample_max_grad_norm 1.0
         --target_epsilon {target_epsilon}
+        --label_names "labels"
         --disable_tqdm True
         --dataloader_num_workers 2
         --report_to azure_ml

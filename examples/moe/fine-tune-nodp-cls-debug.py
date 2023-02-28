@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-'''Train MoE model series with DP'''
+'''Train MoE model series without DP'''
 
 import torch
 import datasets
@@ -14,8 +14,7 @@ import numpy as np
 from typing import Optional, Tuple
 
 from dataclasses import dataclass, field
-from transformers import AutoTokenizer, AutoConfig, DataCollatorWithPadding
-from modeling_switch_transformers import SwitchTransformersForConditionalGeneration, SwitchTransformersModel 
+from transformers import AutoTokenizer, AutoConfig, SwitchTransformersForConditionalGeneration, SwitchTransformersModel, DataCollatorWithPadding
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +58,7 @@ class SwitchTransformersModelForSequenceClassification(SwitchTransformersForCond
             use_cache=use_cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            output_router_logits=False,
+            output_router_logits=output_router_logits,
             return_dict=return_dict
         )
 
@@ -84,7 +83,6 @@ class ModelArguments:
 @dataclass
 class Arguments:
     train: dp_transformers.TrainingArguments
-    privacy: dp_transformers.PrivacyArguments
     model: ModelArguments
 
 
@@ -147,12 +145,11 @@ def main(args: Arguments):
         f"distributed training: {bool(train_args.local_rank != -1)}, 16-bits training: {train_args.fp16}"
     )
     logger.info(f"Training/evaluation parameters {train_args}")
-    logger.info(f"Privacy parameters {privacy_args}")
 
     # Load data
     #dataset = datasets.load_dataset(args.model.task, cache_dir=args.model.data_dir)
     dataset = datasets.load_dataset(args.model.task)
-    
+
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name, use_fast=False)
 
@@ -161,24 +158,8 @@ def main(args: Arguments):
 
     # Load model
     #model = SwitchTransformersModelForSequenceClassification.from_pretrained(args.model.model_name, cache_dir=args.model.data_dir)
-    config = AutoConfig.from_pretrained(args.model.model_name)
-    config.dropout_rate = 0.0
-    model = SwitchTransformersModelForSequenceClassification.from_pretrained(args.model.model_name, config=config)
+    model = SwitchTransformersModelForSequenceClassification.from_pretrained(args.model.model_name)
     model = model.to(train_args.device)
-
-    for index, block in enumerate(model.encoder.block):
-        if index % 2 == 1:
-            block.layer[1].mlp.router.classifier.weight.requires_grad = False
-            for expert in block.layer[1].mlp.experts:
-                block.layer[1].mlp.experts[expert].wi.weight.requires_grad = False
-                block.layer[1].mlp.experts[expert].wo.weight.requires_grad = False
-
-    for index, block in enumerate(model.decoder.block):
-        if index % 2 == 1:
-            block.layer[2].mlp.router.classifier.weight.requires_grad = False
-            for expert in block.layer[2].mlp.experts:
-                block.layer[2].mlp.experts[expert].wi.weight.requires_grad = False
-                block.layer[2].mlp.experts[expert].wo.weight.requires_grad = False
 
     if train_args.local_rank == 0:
         logger.info(f"Total number of parameters of the model: {model.num_parameters(only_trainable=False)}")
@@ -196,28 +177,19 @@ def main(args: Arguments):
         predictions = np.argmax(predictions, axis=-1)
         return accuracy.compute(predictions=predictions, references=labels)
 
-    trainer = dp_transformers.dp_utils.OpacusDPTrainer(
+    trainer = transformers.Trainer(
         args=train_args,
         model=model,
         train_dataset=dataset['train'],
         eval_dataset=dataset['validation'],
         data_collator=data_collator,
-        privacy_args=privacy_args,
         compute_metrics=compute_metrics
     )
 
     metrics = trainer.evaluate()
-    try:
-        trainer.train()
-    finally:
-        eps_prv = trainer.get_prv_epsilon()
-        eps_rdp = trainer.get_rdp_epsilon()
-        trainer.log({
-            "final_epsilon_prv": eps_prv,
-            "final_epsilon_rdp": eps_rdp
-        })
+    trainer.train()
 
 if __name__ == "__main__":
-    arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, dp_transformers.PrivacyArguments, ModelArguments))
-    train_args, privacy_args, model_args = arg_parser.parse_args_into_dataclasses()
-    main(Arguments(train=train_args, privacy=privacy_args, model=model_args))
+    arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, ModelArguments))
+    train_args, model_args = arg_parser.parse_args_into_dataclasses()
+    main(Arguments(train=train_args, model=model_args))
