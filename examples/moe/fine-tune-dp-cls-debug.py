@@ -68,7 +68,7 @@ class SwitchTransformersModelForSequenceClassification(SwitchTransformersForCond
 
 @dataclass
 class ModelArguments:
-    data_dir: str
+    #data_dir: str
 
     task: str
 
@@ -150,7 +150,8 @@ def main(args: Arguments):
     logger.info(f"Privacy parameters {privacy_args}")
 
     # Load data
-    dataset = datasets.load_dataset(args.model.task, cache_dir=args.model.data_dir)
+    #dataset = datasets.load_dataset(args.model.task, cache_dir=args.model.data_dir)
+    dataset = datasets.load_dataset(args.model.task)
     
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name, use_fast=False)
@@ -159,7 +160,8 @@ def main(args: Arguments):
     dataset = data_process(args, tokenizer, dataset)
 
     # Load model
-    model = SwitchTransformersModelForSequenceClassification.from_pretrained(args.model.model_name, cache_dir=args.model.data_dir)
+    #model = SwitchTransformersModelForSequenceClassification.from_pretrained(args.model.model_name, cache_dir=args.model.data_dir)
+    model = SwitchTransformersModelForSequenceClassification.from_pretrained(args.model.model_name)
     model = model.to(train_args.device)
 
     for index, block in enumerate(model.encoder.block):
@@ -180,7 +182,7 @@ def main(args: Arguments):
         logger.info(f"Total number of parameters of the model: {model.num_parameters(only_trainable=False)}")
         logger.info(f"Fine-tuned number of parameters of the model: {model.num_parameters(only_trainable=True)}")
 
-    model = model.cuda()
+    #model = model.cuda()
     model.train()
 
     data_collator = DataCollatorWithPadding(tokenizer)
