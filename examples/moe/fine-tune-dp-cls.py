@@ -164,19 +164,19 @@ def main(args: Arguments):
     model = SwitchTransformersModelForSequenceClassification.from_pretrained(args.model.model_name, config=config, cache_dir=args.model.data_dir)
     model = model.to(train_args.device)
 
-    for index, block in enumerate(model.encoder.block):
-        if index % 2 == 1:
-            block.layer[1].mlp.router.classifier.weight.requires_grad = False
-            for expert in block.layer[1].mlp.experts:
-                block.layer[1].mlp.experts[expert].wi.weight.requires_grad = False
-                block.layer[1].mlp.experts[expert].wo.weight.requires_grad = False
+    # for index, block in enumerate(model.encoder.block):
+    #     if index % 2 == 1:
+    #         block.layer[1].mlp.router.classifier.weight.requires_grad = False
+    #         for expert in block.layer[1].mlp.experts:
+    #             block.layer[1].mlp.experts[expert].wi.weight.requires_grad = False
+    #             block.layer[1].mlp.experts[expert].wo.weight.requires_grad = False
 
-    for index, block in enumerate(model.decoder.block):
-        if index % 2 == 1:
-            block.layer[2].mlp.router.classifier.weight.requires_grad = False
-            for expert in block.layer[2].mlp.experts:
-                block.layer[2].mlp.experts[expert].wi.weight.requires_grad = False
-                block.layer[2].mlp.experts[expert].wo.weight.requires_grad = False
+    # for index, block in enumerate(model.decoder.block):
+    #     if index % 2 == 1:
+    #         block.layer[2].mlp.router.classifier.weight.requires_grad = False
+    #         for expert in block.layer[2].mlp.experts:
+    #             block.layer[2].mlp.experts[expert].wi.weight.requires_grad = False
+    #             block.layer[2].mlp.experts[expert].wo.weight.requires_grad = False
 
     if train_args.local_rank == 0:
         logger.info(f"Total number of parameters of the model: {model.num_parameters(only_trainable=False)}")

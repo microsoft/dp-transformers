@@ -334,7 +334,9 @@ class SwitchTransformersSparseMLP(nn.Module):
         for idx, expert in enumerate(self.experts.values()):
 
             token_indices = router_mask[:, :, idx].bool()
-            next_states[token_indices] = expert(hidden_states[token_indices])
+            expert_input = hidden_states * token_indices.unsqueeze(-1)
+            expert_output = expert(expert_input)
+            next_states[token_indices] = expert_output[token_indices]
 
         hidden_states = router_probs * next_states
         return hidden_states, (router_logits, expert_index)
