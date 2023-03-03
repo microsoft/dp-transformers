@@ -3,6 +3,7 @@
 
 '''Train MoE model series without DP'''
 
+import os
 import torch
 import datasets
 import dp_transformers
@@ -67,7 +68,7 @@ class SwitchTransformersModelForSequenceClassification(SwitchTransformersForCond
 
 @dataclass
 class ModelArguments:
-    #data_dir: str
+    data_dir: str
 
     task: str
 
@@ -148,7 +149,10 @@ def main(args: Arguments):
 
     # Load data
     #dataset = datasets.load_dataset(args.model.task, cache_dir=args.model.data_dir)
-    dataset = datasets.load_dataset(args.model.task)
+    #dataset = datasets.load_dataset(args.model.task)
+    dataset = datasets.load_dataset('json', data_files={'train': os.path.join(args.model.data_dir, "train.json"),
+                                                       'validation': os.path.join(args.model.data_dir, "val.json")},
+                                                       )
 
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model.model_name, use_fast=False)
@@ -186,7 +190,7 @@ def main(args: Arguments):
         compute_metrics=compute_metrics
     )
 
-    metrics = trainer.evaluate()
+    #metrics = trainer.evaluate()
     trainer.train()
 
 if __name__ == "__main__":

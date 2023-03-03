@@ -1,0 +1,87 @@
+description: moe-sst2-dp
+
+target:
+  service: amlk8s
+  name: itphyperdgx2cl1
+  vc: hai7a
+
+# environment:
+#   registry: mcr.microsoft.com
+#   image: azureml/openmpi4.1.0-cuda11.1-cudnn8-ubuntu18.04:latest
+#   conda_yaml_file: $CONFIG_DIR/environment.yml # requires amlt>=8.2.1.post1
+#   setup:
+#     - pip install .
+
+environment:
+  registry: mcr.microsoft.com
+  image: azureml/openmpi4.1.0-cuda11.1-cudnn8-ubuntu18.04:latest
+  image_setup:
+    - pip install torch==1.12.1
+    - pip install transformers==4.26.0
+    - pip install datasets==2.6.2
+    - pip install evaluate
+    - pip install sentencepiece
+    - pip install scikit-learn
+  setup:
+    - pip install .
+
+code:
+  local_dir: $CONFIG_DIR/../../../
+
+storage:
+  input_path:
+    # You should use your own blob here
+    storage_account_name: huinan
+    container_name: amulet
+  output_path:
+    # You should use your own blob here
+    storage_account_name: huinan
+    container_name: amulet
+
+
+search:
+  job_template:
+    name: moe-full-dp-16v100-sst2_{experiment_name:s}_{auto:4s}
+    sku: 32G16-V100
+    command:
+      - python -m torch.distributed.run --nproc_per_node 16 examples/moe/fine-tune-dp-cls.py
+        --data_dir /mnt/input_path/huggingface
+        --task {task}
+        --output_dir /mnt/input_path/huggingface/moe/sst2/dp/{experiment_name:s}_{auto:4s}
+        --save_strategy no
+        --model_name google/switch-base-8
+        --sequence_len {sequence_len}
+        --per_device_train_batch_size 4
+        --gradient_accumulation_steps 16
+        --evaluation_strategy epoch
+        --log_level info
+        --per_device_eval_batch_size 8
+        --eval_accumulation_steps 1
+        --seed 42
+        --weight_decay 0.01
+        --remove_unused_columns False
+        --num_train_epochs {num_train_epochs}
+        --logging_steps 5
+        --max_grad_norm 0
+        --lr_scheduler_type constant
+        --learning_rate {learning_rate}
+        --per_sample_max_grad_norm 1.0
+        --target_epsilon {target_epsilon}
+        --label_names "labels"
+        --disable_tqdm True
+        --dataloader_num_workers 2
+        --report_to azure_ml
+        $EXTRA_ARGS
+  type: grid
+  max_trials: 1
+  params:
+    - name: num_train_epochs
+      values: choice(20)
+    - name: learning_rate
+      values: choice(0.0001)
+    - name: sequence_len
+      values: choice(128)
+    - name: task
+      values: choice("sst2")
+    - name: target_epsilon
+      values: choice(8.0)
