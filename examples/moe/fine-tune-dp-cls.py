@@ -19,6 +19,13 @@ from modeling_switch_transformers import SwitchTransformersForConditionalGenerat
 
 logger = logging.getLogger(__name__)
 
+# Little hack on singularity clusters: OSError: Not enough disk space. Needed: Unknown size (download: Unknown size, generated: Unknown size, post-processed: Unknown size)
+
+def xxx(*args, **kwargs):
+    return True
+
+datasets.utils.py_utils.has_sufficient_disk_space = xxx
+
 
 class SwitchTransformersModelForSequenceClassification(SwitchTransformersForConditionalGeneration):
 
