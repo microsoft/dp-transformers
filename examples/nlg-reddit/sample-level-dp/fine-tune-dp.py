@@ -59,8 +59,12 @@ from dp_transformers.module_modification import convert_gpt2_attention_to_lora
 
 @dataclass
 class ModelArguments:
-    training_data: str = field(default="./", metadata={
+    train_data_dir: str = field(default="./", metadata={
         "help": "Path to training data"
+    })
+
+    val_data_dir: str = field(default="./", metadata={
+        "help": "Path to validation data"
     })
 
     model_name: str = field(default="gpt2", metadata={
@@ -81,6 +85,10 @@ class ModelArguments:
 
     lora_alpha: int = field(default=32, metadata={
         "help": "LoRA attention alpha"
+    })
+
+    overwrite_cache: bool = field(default=False, metadata={
+        "help": "whether to overwrite the cache of the dataset"
     })
 
 
@@ -124,9 +132,8 @@ def main(args: Arguments):
     model = model.to(train_args.device)
 
     # Load data
-    # data_path = "C:\\Users\\huinan\\OneDrive - Microsoft\\Desktop\\dp-transformers\\examples\\nlg-reddit\\sample-level-dp\\tiny.csv"
-    data_path = os.path.join(args.model.training_data, "train.csv") 
-    dataset = datasets.load_dataset('csv', data_files={'train': data_path, 'validation': data_path}) #.train_test_split(0.2, seed=args.train.seed)
+    dataset = datasets.load_dataset('csv', data_files={'train': args.model.train_data_dir,
+                                                       'validation': args.model.val_data_dir})
 
     # Load tokenizer
     tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name)
@@ -137,15 +144,12 @@ def main(args: Arguments):
     for i in range(num_added_toks):
         model.transformer.wte.weight.data[-(i + 1), :] = mean_tok_emb
 
-    # label_column_names = [name for name in dataset["train"].column_names if "label" in name]
+    label_column_names = [name for name in dataset["train"].column_names if "label" in name]
     # Tokenize data
     def preprocess_function(examples):
         batch = []
-        # for t in range(len(examples['text'])):
-        #     text = "\t".join([examples[name][t] for name in label_column_names]) + "\n\n" + examples['text'][t] + tokenizer.eos_token
-        #     batch.append(text)
-        for t in range(len(examples['Subject'])):
-            text = "Write an email with subject: " + examples['Subject'][t] + "\n\n" + examples['UniqueBody'][t] + tokenizer.eos_token
+        for t in range(len(examples['text'])):
+            text = "\t".join([examples[name][t] for name in label_column_names]) + "\n\n" + examples['text'][t] + tokenizer.eos_token
             batch.append(text)
 
         result = tokenizer(batch, padding="max_length", truncation=True,
@@ -153,10 +157,13 @@ def main(args: Arguments):
 
         return result
 
-    # Tokenize data
     with train_args.main_process_first(desc="tokenizing dataset"):
         dataset = dataset.map(
-            preprocess_function, batched=True, desc="tokenizing dataset", remove_columns=dataset.column_names['train']
+            preprocess_function,
+            batched=True,
+            load_from_cache_file=not args.model.overwrite_cache,
+            remove_columns=dataset.column_names['train'],
+            desc="Running tokenizer on dataset",
         )
 
     if args.model.lora_dim > 0:

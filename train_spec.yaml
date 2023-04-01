@@ -12,9 +12,13 @@ tags:
   git: https://github.com/microsoft/dp-transformers
 
 inputs:
-  training_data:
+  train_data_dir:
     type: AnyDirectory
     description: Training data in csv format
+
+  val_data_dir:
+    type: AnyDirectory
+    description: Val data in csv format
 
   model_name:
     type: Enum
@@ -129,7 +133,8 @@ launcher:
   additional_arguments: >-
     python -m torch.distributed.run 
     --nproc_per_node 8 examples/nlg-reddit/sample-level-dp/fine-tune-dp.py
-    --training_data {inputs.training_data}
+    --train_data_dir {inputs.train_data_dir}
+    --val_data_dir {inputs.val_data_dir}
     --output_dir {outputs.output_dir}
     --model_name {inputs.model_name}
     --sequence_len {inputs.sequence_len}
@@ -157,6 +162,7 @@ launcher:
     --lora_alpha {inputs.lora_alpha}
     --lora_dropout {inputs.lora_dropout}
     --report_to azure_ml
+    --overwrite_cache
 
 environment:
   docker:

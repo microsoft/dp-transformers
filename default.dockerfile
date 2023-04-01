@@ -5,8 +5,6 @@ WORKDIR /home/azureuser
 RUN git clone -b huinan/synthetic-AML-feedback https://github.com/microsoft/dp-transformers.git
 
 RUN ls -lah /home/azureuser
-RUN pip install -r /home/azureuser/dp-transformers/requirements.txt
-
-RUN ls -lah /home/azureuser/dp-transformers
-RUN cd dp-transformers 
+WORKDIR /home/azureuser/dp-transformers
+RUN pip install -r requirements.txt
 RUN pip install .
