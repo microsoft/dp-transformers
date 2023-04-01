@@ -1,7 +1,7 @@
 $schema: http://azureml/sdk-1-5/DistributedComponent.json
-name: microsoft.fhl.transformers.dp.finetune.huinan
-version: 0.0.8
-display_name: "dp-transformers-huinan"
+name: microsoft.dp-transformers.dp.finetune
+version: 0.0.0
+display_name: "gpt2-finetune-dp"
 type: DistributedComponent
 description: >-
   https://github.com/microsoft/dp-transformers/
@@ -160,23 +160,9 @@ launcher:
 
 environment:
   docker:
-    image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04:latest
+    build:
+      # file path is resolved after additional includes
+      dockerfile: file:default.dockerfile
   conda:
-    conda_dependencies:
-      name: project_environment
-      channels:
-      - conda-forge
-      dependencies:
-      - pip=20.2
-      - python=3.7.9
-      - pip:
-        - shrike
-        - pandas
-        - torch==1.12.1
-        - opacus==1.1.3
-        - transformers==4.20.1
-        - datasets==2.0.0
-        - prv-accountant<0.2.0
-        - scikit-learn
-        - dp-transformers
+    userManagedDependencies: true
   os: Linux
