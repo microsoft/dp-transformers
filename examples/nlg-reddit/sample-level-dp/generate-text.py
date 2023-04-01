@@ -277,16 +277,14 @@ def main():
 
     with torch.no_grad():
         prompt_counter = collections.Counter()
-        data_path = os.path.join(args.input_training_file, "train.csv")
-        with open(data_path, encoding='utf-8') as rf:
+        with open(args.input_training_file, encoding='utf-8') as rf:
             csv_reader = csv.reader(rf)
             title = next(csv_reader)
 
-            #label_column_index = [i for i,name in enumerate(title) if "label" in name]
+            label_column_index = [i for i,name in enumerate(title) if "label" in name]
 
             for line in csv_reader:
-                #prompt = "\t".join([line[idx] for idx in label_column_index]) + "\n\n"
-                prompt = "Write an email with subject:"
+                prompt = "\t".join([line[idx] for idx in label_column_index]) + "\n\n"
                 prompt_counter[prompt] += 1
 
         ratio_generation_training = args.total_sequences / sum(prompt_counter.values())
@@ -310,11 +308,10 @@ def main():
     output_path = os.path.join(args.output_dir, str(args.length) + "." + str(args.seed) + ".generations.csv")
     with open(output_path, 'w', newline='', encoding="utf-8") as wf:
         csv_writer = csv.writer(wf)
-        #csv_writer.writerow(title)
-        csv_writer.writerow(["Subject_UniqueBody"])
+        csv_writer.writerow(title)
         for obj in all_sequences:
             if obj[0]: # remove empty sequences
-                csv_writer.writerow([obj[0]])
+                csv_writer.writerow(obj)
 
 if __name__ == "__main__":
     main()

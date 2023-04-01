@@ -2,9 +2,9 @@
 # Licensed under the MIT License.
 
 $schema: https://componentsdk.azureedge.net/jsonschema/CommandComponent.json
-name: microsoft.fhl.transformers.dp.generate
-version: 0.0.7
-display_name: "dp-transformers-generation"
+name: microsoft.dp-transformers.generate
+version: 0.0.0
+display_name: "gpt2-generation"
 type: CommandComponent
 description: >-
   https://github.com/microsoft/dp-transformers/
@@ -62,7 +62,7 @@ outputs:
     description: "output_dir"
 
 command: >-
-  python examples/nlg-reddit/sample-level-dp/generate-text.py
+  /opt/miniconda/envs/myenv/bin/python examples/nlg-reddit/sample-level-dp/generate-text.py
   --model_type {inputs.model_type}
   --model_name_or_path {inputs.model_name_or_path}
   --input_training_file {inputs.input_training_file}
@@ -77,25 +77,9 @@ command: >-
 
 environment:
   docker:
-    image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04:latest
+    build:
+      # file path is resolved after additional includes
+      dockerfile: file:default.dockerfile
   conda:
-    conda_dependencies:
-      name: project_environment
-      channels:
-      - conda-forge
-      dependencies:
-      - pip=20.2
-      - python=3.7.9
-      - pip:
-        - shrike
-        - pyarrow==11.0.0
-        - pandas
-        - opacus==1.1.3
-        - torch==1.12.1
-        - transformers==4.20.1
-        - datasets==2.0.0
-        - opacus==1.1.3
-        - prv-accountant<0.2.0
-        - scikit-learn
-        - dp-transformers
+    userManagedDependencies: true
   os: Linux
