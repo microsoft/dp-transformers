@@ -1,6 +1,6 @@
 $schema: http://azureml/sdk-1-5/DistributedComponent.json
 name: microsoft.dp-transformers.dp.finetune
-version: 0.0.0
+version: 0.0.1
 display_name: "gpt2-finetune-dp"
 type: DistributedComponent
 description: >-
@@ -131,7 +131,7 @@ outputs:
 launcher:
   type: mpi
   additional_arguments: >-
-    python -m torch.distributed.run 
+    /opt/miniconda/envs/myenv/bin/python -m torch.distributed.run 
     --nproc_per_node 8 examples/nlg-reddit/sample-level-dp/fine-tune-dp.py
     --train_data_dir {inputs.train_data_dir}
     --val_data_dir {inputs.val_data_dir}

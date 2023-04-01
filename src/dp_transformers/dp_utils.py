@@ -17,6 +17,7 @@ from opacus.accountants import RDPAccountant
 from prv_accountant import Accountant as PRVAccountant
 from contextlib import contextmanager
 from typing import Any, Callable, List, Optional, Union, Dict, Sequence
+from shrike.compliant_logging.constants import DataCategory
 
 from dp_transformers import sampler, arguments
 
@@ -164,7 +165,7 @@ class OpacusDPTrainer(Trainer):
 
         # Wrap model in DDP and GradSampleModule
         if args.parallel_mode == training_args.ParallelMode.DISTRIBUTED:
-            logger.info(f"Wrapping the model with DPDDP in distributed training.")
+            logger.info(f"Wrapping the model with DPDDP in distributed training.", category=DataCategory.PUBLIC)
             model = opacus.distributed.DifferentiallyPrivateDistributedDataParallel(model)
 
         model = GradSampleModule(model)

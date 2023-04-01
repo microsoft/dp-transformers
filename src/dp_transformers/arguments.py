@@ -10,6 +10,7 @@ from transformers import IntervalStrategy, logging
 from dataclasses import dataclass, field
 from datasets.utils import disable_progress_bar
 from prv_accountant import Accountant
+from shrike.compliant_logging.constants import DataCategory
 
 logger = logging.get_logger(__name__)
 
@@ -31,7 +32,7 @@ class PrivacyArguments:
     def initialize(self, sampling_probability: float, num_steps: int, num_samples: int) -> None:
         if self.target_delta is None:
             self.target_delta = 1.0/num_samples
-        logger.info(f"The target delta is set to be: {self.target_delta}")
+        logger.info(f"The target delta is set to be: {self.target_delta}", category=DataCategory.PUBLIC)
 
         # Set up noise multiplier
         if self.noise_multiplier is None:
@@ -41,7 +42,7 @@ class PrivacyArguments:
                 target_delta=self.target_delta,
                 target_epsilon=self.target_epsilon
             )
-        logger.info(f"The noise multiplier is set to be: {self.noise_multiplier}")
+        logger.info(f"The noise multiplier is set to be: {self.noise_multiplier}", category=DataCategory.PUBLIC)
 
     @property
     def is_initialized(self) -> bool:
