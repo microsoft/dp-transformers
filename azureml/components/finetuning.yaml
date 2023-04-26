@@ -1,0 +1,174 @@
+$schema: http://azureml/sdk-1-5/DistributedComponent.json
+name: dp-transformers.finetuning
+version: 0.1.0
+display_name: "DP-Transformers Finetuning"
+type: DistributedComponent
+description: >-
+  https://github.com/microsoft/dp-transformers/
+
+is_deterministic: true
+
+tags:
+  git: https://github.com/microsoft/dp-transformers
+
+inputs:
+  train_data_dir:
+    type: AnyDirectory
+    description: Training data in csv format
+
+  val_data_dir:
+    type: AnyDirectory
+    description: Val data in csv format
+
+  model_name:
+    type: Enum
+    default: gpt2
+    enum:
+      - gpt2
+      - gpt2-medium
+      - gpt2-large
+      - gpt2-xl
+
+  sequence_len:
+    type: Integer
+    default: 256
+
+  per_device_train_batch_size:
+    type: Integer
+    default: 16
+
+  gradient_accumulation_steps:
+    type: Integer
+    default: 8
+
+  evaluation_strategy:
+    type: String
+    default: epoch
+
+  save_strategy:
+    type: String
+    default: epoch
+
+  log_level:
+    type: String
+    default: info    
+
+  per_device_eval_batch_size:
+    type: Integer
+    default: 32    
+
+  eval_accumulation_steps:
+    type: Integer
+    default: 1    
+
+  seed:
+    type: Integer
+    default: 42    
+
+  target_epsilon:
+    type: Integer
+    default: 16    
+
+  per_sample_max_grad_norm:
+    type: Float
+    default: 1.0    
+
+  weight_decay:
+    type: Float
+    default: 0.01    
+
+  remove_unused_columns:
+    type: Boolean
+    default: False   
+
+  num_train_epochs:
+    type: Integer
+    default: 1
+
+  logging_steps:
+    type: Integer
+    default: 5    
+
+  max_grad_norm:
+    type: Integer
+    default: 0    
+
+  lr_scheduler_type:
+    type: Enum
+    default: 'constant'
+    enum:
+      - constant
+
+  learning_rate:
+    type: Float
+    default: 0.0004    
+
+  lora_dim:
+    type: Integer
+    default: 4
+  
+  lora_alpha:
+    type: Float
+    default: 32
+
+  lora_dropout:
+    type: Float
+    default: 0.0
+
+  disable_tqdm:
+    type: Boolean
+    default: True    
+
+  dataloader_num_workers:
+    type: Integer
+    default: 2
+
+outputs:
+  output_dir:
+    type: AnyDirectory
+    description: "output_dir"
+
+code: ./finetuning
+launcher:
+  type: mpi
+  additional_arguments: >-
+    /opt/miniconda/envs/myenv/bin/python -m torch.distributed.run 
+    --nproc_per_node 8 fine-tune-dp.py
+    --train_data_dir {inputs.train_data_dir}
+    --val_data_dir {inputs.val_data_dir}
+    --output_dir {outputs.output_dir}
+    --model_name {inputs.model_name}
+    --sequence_len {inputs.sequence_len}
+    --per_device_train_batch_size {inputs.per_device_train_batch_size}
+    --gradient_accumulation_steps {inputs.gradient_accumulation_steps}
+    --evaluation_strategy {inputs.evaluation_strategy}
+    --save_strategy {inputs.save_strategy}
+    --log_level {inputs.log_level}
+    --per_device_eval_batch_size {inputs.per_device_eval_batch_size}
+    --eval_accumulation_steps {inputs.eval_accumulation_steps}
+    --seed {inputs.seed}
+    --target_epsilon {inputs.target_epsilon}
+    --per_sample_max_grad_norm {inputs.per_sample_max_grad_norm}
+    --prediction_loss_only
+    --weight_decay {inputs.weight_decay}
+    --remove_unused_columns {inputs.remove_unused_columns}
+    --num_train_epochs {inputs.num_train_epochs}
+    --logging_steps {inputs.logging_steps}
+    --max_grad_norm {inputs.max_grad_norm}
+    --lr_scheduler_type {inputs.lr_scheduler_type}
+    --learning_rate {inputs.learning_rate}
+    --disable_tqdm {inputs.disable_tqdm}
+    --dataloader_num_workers {inputs.dataloader_num_workers}
+    --lora_dim {inputs.lora_dim}
+    --lora_alpha {inputs.lora_alpha}
+    --lora_dropout {inputs.lora_dropout}
+    --report_to azure_ml
+    --overwrite_cache
+
+environment:
+  docker:
+    build:
+      dockerfile: file:base.dockerfile
+  conda:
+    userManagedDependencies: true
+  os: Linux

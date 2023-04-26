@@ -1,0 +1,116 @@
+$schema: https://componentsdk.azureedge.net/jsonschema/CommandComponent.json
+name: dp-transformers.classification
+version: 0.1.0
+display_name: "DP-Transformers Classification"
+type: CommandComponent
+description: >-
+  https://github.com/microsoft/dp-transformers/
+
+is_deterministic: true
+
+tags:
+  git: https://github.com/microsoft/dp-transformers
+
+inputs:
+  train_file:
+    type: AnyDirectory
+    description: Training data in csv format
+  
+  validation_file:
+    type: AnyDirectory
+    description: Val data in csv format
+
+  test_file:
+    type: AnyDirectory
+    description: Test data in csv format
+
+  model_name_or_path:
+    type: Enum
+    default: roberta-base
+    enum:
+      - roberta-base
+      - roberta-large
+
+  max_seq_length:
+    type: Integer
+    default: 256
+
+  per_device_train_batch_size:
+    type: Integer
+    default: 32
+
+  evaluation_strategy:
+    type: String
+    default: steps
+
+  eval_steps:
+    type: Integer
+    default: 20
+
+  save_strategy:
+    type: String
+    default: steps 
+
+  save_steps:
+    type: Integer
+    default: 20 
+
+  per_device_eval_batch_size:
+    type: Integer
+    default: 64    
+
+  num_train_epochs:
+    type: Integer
+    default: 1
+
+  logging_steps:
+    type: Integer
+    default: 10
+
+  learning_rate:
+    type: Float
+    default: 0.00003    
+  
+  label_column_name:
+    type: String
+    default: HasAttachments
+
+outputs:
+  output_dir:
+    type: AnyDirectory
+    description: "output_dir"
+
+code: ./classification
+command: >-
+    /opt/miniconda/envs/myenv/bin/python run-classification.py
+    --train_file {inputs.train_file}
+    --validation_file {inputs.validation_file}
+    --test_file {inputs.test_file}
+    --label_column_name {inputs.label_column_name}
+    --model_name_or_path {inputs.model_name_or_path}
+    --max_seq_length {inputs.max_seq_length}
+    --per_device_train_batch_size {inputs.per_device_train_batch_size}
+    --evaluation_strategy {inputs.evaluation_strategy}
+    --eval_steps {inputs.eval_steps}
+    --save_steps {inputs.save_steps}
+    --save_strategy {inputs.save_strategy}
+    --per_device_eval_batch_size {inputs.per_device_eval_batch_size}
+    --num_train_epochs {inputs.num_train_epochs}
+    --logging_steps {inputs.logging_steps}
+    --learning_rate {inputs.learning_rate}
+    --output_dir {outputs.output_dir}
+    --overwrite_cache True
+    --load_best_model_at_end True
+    --do_train
+    --do_eval
+    --do_predict
+    --overwrite_output_dir
+    --report_to azure_ml
+
+environment:
+  docker:
+    build:
+      dockerfile: file:base.dockerfile
+  conda:
+    userManagedDependencies: true
+  os: Linux

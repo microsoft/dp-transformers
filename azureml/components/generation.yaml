@@ -1,0 +1,85 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+$schema: https://componentsdk.azureedge.net/jsonschema/CommandComponent.json
+name: dp-transformers.generation
+version: 0.1.0
+display_name: "DP-Transformers Generation"
+type: CommandComponent
+description: >-
+  https://github.com/microsoft/dp-transformers/
+
+is_deterministic: true
+
+tags:
+  git: https://github.com/microsoft/dp-transformers
+
+inputs:
+  input_training_file:
+    type: AnyDirectory
+    description: Training data in csv format
+
+  model_type:
+    type: Enum
+    default: gpt2
+    enum:
+      - gpt2
+      - gpt2-medium
+      - gpt2-large
+      - gpt2-xl
+
+  model_name_or_path:
+    type: AnyDirectory
+    description: Model
+
+  length:
+    type: Integer
+    default: 256
+
+  total_sequences:
+    type: Integer
+    default: 120
+
+  batch_size:
+    type: Integer
+    default: 8
+
+  lora_dim:
+    type: Integer
+    default: 4
+  
+  lora_alpha:
+    type: Float
+    default: 32
+
+  lora_dropout:
+    type: Float
+    default: 0.0
+
+outputs:
+  output_dir:
+    type: AnyDirectory
+    description: "output_dir"
+
+code: ./generation
+command: >-
+  /opt/miniconda/envs/myenv/bin/python generate-text.py
+  --model_type {inputs.model_type}
+  --model_name_or_path {inputs.model_name_or_path}
+  --input_training_file {inputs.input_training_file}
+  --output_dir {outputs.output_dir}
+  --length {inputs.length}
+  --total_sequences {inputs.total_sequences}
+  --batch_size {inputs.batch_size}
+  --lora_dim {inputs.lora_dim}
+  --lora_alpha {inputs.lora_alpha}
+  --lora_dropout {inputs.lora_dropout}
+  --do_sample
+
+environment:
+  docker:
+    build:
+      dockerfile: file:default.dockerfile
+  conda:
+    userManagedDependencies: true
+  os: Linux
