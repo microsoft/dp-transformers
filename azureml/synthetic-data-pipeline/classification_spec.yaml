@@ -1,6 +1,6 @@
 $schema: https://componentsdk.azureedge.net/jsonschema/CommandComponent.json
-name: dp-transformers.classification
-version: 0.1.0
+name: microsoft.dp-transformers.classification
+version: 0.1.1
 display_name: "DP-Transformers Classification"
 type: CommandComponent
 description: >-

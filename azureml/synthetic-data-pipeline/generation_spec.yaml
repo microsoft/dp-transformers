@@ -2,8 +2,8 @@
 # Licensed under the MIT License.
 
 $schema: https://componentsdk.azureedge.net/jsonschema/CommandComponent.json
-name: dp-transformers.generation
-version: 0.1.0
+name: microsoft.dp-transformers.generation
+version: 0.1.1
 display_name: "DP-Transformers Generation"
 type: CommandComponent
 description: >-
@@ -79,7 +79,7 @@ command: >-
 environment:
   docker:
     build:
-      dockerfile: file:default.dockerfile
+      dockerfile: file:base.dockerfile
   conda:
     userManagedDependencies: true
   os: Linux
