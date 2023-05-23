@@ -57,9 +57,6 @@ class DPCallback(TrainerCallback):
 
         self.on_substep_end_was_called = True
 
-    def on_step_begin(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, optimizer=None, **kwargs): 
-        optimizer.signal_skip_step(do_skip=False)
-
     def on_step_end(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, optimizer=None, **kwargs):
         if not (
             args.gradient_accumulation_steps <= 1 or
