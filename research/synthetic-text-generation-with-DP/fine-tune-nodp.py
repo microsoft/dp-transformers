@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-'''Train GPT2 model series with DP (w/ parameter-efficient approach LoRA when lora_dim > 0)'''
+'''Train GPT2 model series without DP (w/ parameter-efficient approach LoRA when lora_dim > 0)'''
 
 import os
 import datasets
@@ -44,15 +44,14 @@ class ModelArguments:
         "help": "LoRA attention alpha"
     })
 
+
 @dataclass
 class Arguments:
     train: dp_transformers.TrainingArguments
-    privacy: dp_transformers.PrivacyArguments
     model: ModelArguments
 
 
 def main(args: Arguments):
-
     transformers.set_seed(args.train.seed)
 
     # Setup logging
@@ -75,7 +74,6 @@ def main(args: Arguments):
         f"distributed training: {bool(train_args.local_rank != -1)}, 16-bits training: {train_args.fp16}"
     )
     logger.info(f"Training/evaluation parameters {train_args}")
-    logger.info(f"Privacy parameters {privacy_args}")
 
     # Load model
     model = transformers.AutoModelForCausalLM.from_pretrained(args.model.model_name)
@@ -132,25 +130,16 @@ def main(args: Arguments):
 
     data_collator = dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer)
 
-    trainer = dp_transformers.dp_utils.OpacusDPTrainer(
+    trainer = transformers.Trainer(
         args=train_args,
         model=model,
         train_dataset=dataset['train'],
         eval_dataset=dataset['validation'],
         data_collator=data_collator,
-        privacy_args=privacy_args,
         tokenizer=tokenizer
     )
 
-    try:
-        train_result = trainer.train()
-    finally:
-        eps_prv = trainer.get_prv_epsilon()
-        eps_rdp = trainer.get_rdp_epsilon()
-        trainer.log({
-            "final_epsilon_prv": eps_prv,
-            "final_epsilon_rdp": eps_rdp
-        })
+    train_result = trainer.train()
 
     if train_args.local_rank == 0 or train_args.local_rank == -1:
         metrics = train_result.metrics
@@ -158,8 +147,7 @@ def main(args: Arguments):
         trainer.log_metrics("train", metrics)
         trainer.save_metrics("train", metrics)
 
-
 if __name__ == "__main__":
-    arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, dp_transformers.PrivacyArguments, ModelArguments))
-    train_args, privacy_args, model_args = arg_parser.parse_args_into_dataclasses()
-    main(Arguments(train=train_args, privacy=privacy_args, model=model_args))
+    arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, ModelArguments))
+    train_args, model_args = arg_parser.parse_args_into_dataclasses()
+    main(Arguments(train=train_args, model=model_args))

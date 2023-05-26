@@ -21,10 +21,6 @@ import csv
 import os.path
 import random
 import sys
-
-import logging
-logger = logging.getLogger(__name__)
-
 import numpy as np
 import torch
 import transformers
@@ -33,17 +29,10 @@ from tqdm import tqdm
 
 from dp_transformers.module_modification import convert_gpt2_attention_to_lora
 
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-maxInt = sys.maxsize
-
-while True:
-    # decrease the maxInt value by factor 10 
-    # as long as the OverflowError occurs.
-    try:
-        csv.field_size_limit(maxInt)
-        break
-    except OverflowError:
-        maxInt = int(maxInt/10)
 
 MODEL_CLASSES = {
     "distilgpt2": (GPT2LMHeadModel, GPT2Tokenizer),
@@ -174,36 +163,31 @@ def main():
         raise KeyError("the model {} you specified is not supported. You are welcome to add it and open a PR :)")
 
     tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path)
+
+    if tokenizer.pad_token_id:
+        model = transformers.AutoModelForCausalLM.from_pretrained(args.model_type, pad_token_id=tokenizer.pad_token_id)
+    else:
+        model = transformers.AutoModelForCausalLM.from_pretrained(args.model_type, pad_token_id=tokenizer.eos_token_id)
+
+    model.resize_token_embeddings(len(tokenizer))
     
     if args.lora_dim > 0:
-        if tokenizer.pad_token_id:
-            model = transformers.AutoModelForCausalLM.from_pretrained(args.model_type, pad_token_id=tokenizer.pad_token_id)
-        else:
-            model = transformers.AutoModelForCausalLM.from_pretrained(args.model_type, pad_token_id=tokenizer.eos_token_id)
-
-        model.resize_token_embeddings(len(tokenizer))
-
         model = convert_gpt2_attention_to_lora(
             model, r=args.lora_dim, lora_alpha=args.lora_alpha, lora_dropout=args.lora_dropout,
             enable_lora=[True, False, True], merge_weights=False
         )
 
-        state_dict = convert_model(args.model_name_or_path)
-        model, *_ = model_class._load_pretrained_model(
-                model,
-                state_dict,
-                [k for k in state_dict.keys()],  # XXX: rename?
-                os.path.join(args.model_name_or_path, "pytorch_model.bin"),
-                args.model_name_or_path,
-            )
+    state_dict = convert_model(args.model_name_or_path)
+    model, *_ = model_class._load_pretrained_model(
+            model,
+            state_dict,
+            [k for k in state_dict.keys()],  # XXX: rename?
+            os.path.join(args.model_name_or_path, "pytorch_model.bin"),
+            args.model_name_or_path,
+        )
 
-        # Make sure token embedding weights are still tied if needed
-        model.tie_weights()
-    else:
-        if tokenizer.pad_token_id:
-            model = model_class.from_pretrained(args.model_name_or_path, pad_token_id=tokenizer.pad_token_id)
-        else:
-            model = model_class.from_pretrained(args.model_name_or_path, pad_token_id=tokenizer.eos_token_id)
+    # Make sure token embedding weights are still tied if needed
+    model.tie_weights()
 
     model.eval()
     model.to(args.device)
