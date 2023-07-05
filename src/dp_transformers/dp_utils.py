@@ -260,8 +260,6 @@ class OpacusDPTrainer(Trainer):
             raise NotImplementedError("DP currently doesn't support this")
         elif self.use_apex:
             raise NotImplementedError("DP currently doesn't support this")
-        elif self.deepspeed:
-            raise NotImplementedError("DP currently doesn't support this")
         else:
             loss.backward()
 
