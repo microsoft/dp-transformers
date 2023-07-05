@@ -4,7 +4,7 @@
 import os
 from setuptools import setup, find_packages
 
-version = '1.0.0'
+version = '1.0.1'
 
 with open('README.md') as f:
     long_description = f.read()
@@ -28,9 +28,9 @@ setup(
         ]
     },
     install_requires=[
-        "transformers>=4.20.1",
+        "transformers>=4.20.1,<=4.28.1",
         "datasets>=2.0.0,<=2.6.1",
-        "opacus>=1.2.0,<1.3.0",
+        "opacus>=1.1.3,<1.3.0",
         "prv-accountant<0.2.0",
         "torch>=1.9.1,<=1.12.1",
     ],
