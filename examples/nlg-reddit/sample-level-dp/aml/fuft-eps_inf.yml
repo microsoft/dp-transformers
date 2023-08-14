@@ -13,7 +13,6 @@ command: >-
     --per_device_eval_batch_size 64 \
     --eval_accumulation_steps 1 \
     --seed 42 \
-    --per_sample_max_grad_norm 1.0 \
     --prediction_loss_only \
     --weight_decay 0.01 \
     --remove_unused_columns False \
