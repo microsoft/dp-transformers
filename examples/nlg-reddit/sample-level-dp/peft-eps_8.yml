@@ -29,7 +29,6 @@ command: >-
     --lora_dim 4 \
     --lora_alpha 32 \
     --lora_dropout 0.0 \
-    --enable_lora
 environment:
   image: mcr.microsoft.com/azureml/openmpi4.1.0-cuda11.6-cudnn8-ubuntu20.04
   conda_file: environment.yml
