@@ -23,7 +23,8 @@ command: >-
     --lr_scheduler_type constant \
     --learning_rate 1e-4 \
     --disable_tqdm True \
-    --dataloader_num_workers 2
+    --dataloader_num_workers 2 \
+    --label_names labels
 environment:
   image: mcr.microsoft.com/azureml/openmpi4.1.0-cuda11.6-cudnn8-ubuntu20.04
   conda_file: ../environment.yml

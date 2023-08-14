@@ -1,12 +1,12 @@
 $schema: https://azuremlschemas.azureedge.net/latest/commandJob.schema.json
 code: ../../../../
 command: >-
-  python -m pip install -e . && python -m torch.distributed.run --nproc_per_node 8 examples/nlg-reddit/sample-level-dp/fine-tune-dp.py \
+  python -m pip install -e . && python -m torch.distributed.run --nproc_per_node 1 examples/nlg-reddit/sample-level-dp/fine-tune-dp.py \
     --output_dir outputs \
     --model_name gpt2 \
     --sequence_len 128 \
     --per_device_train_batch_size 64 \
-    --gradient_accumulation_steps 4 \
+    --gradient_accumulation_steps 32 \
     --evaluation_strategy steps \
     --eval_steps 128 \
     --log_level info \
@@ -33,7 +33,7 @@ command: >-
 environment:
   image: mcr.microsoft.com/azureml/openmpi4.1.0-cuda11.6-cudnn8-ubuntu20.04
   conda_file: ../environment.yml
-compute: azureml:ND40rsv2
-display_name: parameter_efficient_fine_tuning-epsilon_8
+compute: azureml:NC6v3
+display_name: parameter_efficient_fine_tuning-epsilon_8-gpus_1
 experiment_name: dp-transformers-nlg-reddit-sample-level-dp
 description: Train a model on the Reddit dataset using differential privacy
