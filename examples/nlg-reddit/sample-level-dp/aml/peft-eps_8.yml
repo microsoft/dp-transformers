@@ -1,5 +1,5 @@
 $schema: https://azuremlschemas.azureedge.net/latest/commandJob.schema.json
-code: ../../../
+code: ../../../../
 command: >-
   python -m pip install -e . && python -m torch.distributed.run --nproc_per_node 8 examples/nlg-reddit/sample-level-dp/fine-tune-dp.py \
     --output_dir outputs \
@@ -28,10 +28,10 @@ command: >-
     --dataloader_num_workers 2 \
     --lora_dim 4 \
     --lora_alpha 32 \
-    --lora_dropout 0.0 \
+    --lora_dropout 0.0
 environment:
   image: mcr.microsoft.com/azureml/openmpi4.1.0-cuda11.6-cudnn8-ubuntu20.04
-  conda_file: environment.yml
+  conda_file: ../environment.yml
 compute: azureml:ND40rsv2
 display_name: parameter_efficient_fine_tuning-epsilon_8
 experiment_name: dp-transformers-nlg-reddit-sample-level-dp
