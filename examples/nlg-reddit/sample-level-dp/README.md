@@ -13,7 +13,7 @@ These merely serve as examples as hyperparameters are not optimized and correspo
 | gpt2       | Full               | No  | 8xV100 |    3   |    3.56    |   3.46    | -             |    1227      | fuft-no_inf.yml       |
 | gpt2       | LoRA               | Yes | 8xV100 |    3   |    3.74    |   3.60    |      8.0      |    1128      | peft-eps_8.yml        |
 | gpt2       | LoRA               | Yes | 1xV100 |    3   |    3.74    |   3.60    |      8.0      |    12248     | peft-eps_8-gpus_1.yml |
-| gpt2       | LoRA               | No  | 8xV100 |    3   |    3.70    |   3.58    | -             |    1006      | peft-eps_8.yml        |
+| gpt2       | LoRA               | No  | 8xV100 |    3   |    3.70    |   3.58    | -             |    1006      | peft-eps_inf.yml      |
 
 
 ## Azure Machine Learning
