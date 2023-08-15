@@ -126,7 +126,8 @@ python -m torch.distributed.run --nproc_per_node 16 fine-tune-dp.py \
 --learning_rate 3e-4 \
 --disable_tqdm True \
 --dataloader_num_workers 2 \
---label_names labels
+--label_names labels \
+--enable_lora
 ```
 
 ### Fine-tune only the LoRA layers introduced into the model without DP
@@ -157,5 +158,6 @@ python -m torch.distributed.run --nproc_per_node 16 fine-tune-nodp.py \
 --learning_rate 5e-4 \
 --disable_tqdm True \
 --dataloader_num_workers 2 \
---label_names labels
+--label_names labels \
+--enable_lora
 ```
