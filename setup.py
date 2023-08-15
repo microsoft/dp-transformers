@@ -31,6 +31,7 @@ setup(
         "datasets>=2.0.0",
         "opacus>=1.3.0",
         "peft",
+        "prv_accountant<0.2.0",
         "torch>=1.13.1",
     ],
     test_suite="tests",
