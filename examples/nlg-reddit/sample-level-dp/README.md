@@ -7,15 +7,38 @@ These merely serve as examples as hyperparameters are not optimized and correspo
 
 # Results
 
-| Model (HF) | Fine-tuning Method | DP  | GPUs    | Epochs | Train Loss | Eval Loss | $\varepsilon$ | Run Time [s] |
-| ---------- | ------------------ | --- | ------- | ------ | ---------- | --------- | ------------- | ------------ |
-| gpt2       | Full               | Yes | 16xV100 |    3   |    3.75    |   3.61    |      8.0      |    1944      |
-| gpt2       | Full               | No  | 16xV100 |    3   |    3.56    |   3.46    | -             |    1227      |
-| gpt2       | LoRA               | Yes | 16xV100 |    3   |    3.74    |   3.60    |      8.0      |    1128      |
-| gpt2       | LoRA               | Yes | 1xV100  |    3   |    3.74    |   3.60    |      8.0      |    12248     |
-| gpt2       | LoRA               | No  | 16xV100 |    3   |    3.70    |   3.58    | -             |    1006      |
+| Model (HF) | Fine-tuning Method | DP  | GPUs   | Epochs | Train Loss | Eval Loss | $\varepsilon$ | Run Time [s] | AML Config            |
+| ---------- | ------------------ | --- | ------ | ------ | ---------- | --------- | ------------- | ------------ | --------------------- |
+| gpt2       | Full               | Yes | 8xV100 |    3   |    3.75    |   3.61    |      8.0      |    1944      | fuft-eps_8.yml        |
+| gpt2       | Full               | No  | 8xV100 |    3   |    3.56    |   3.46    | -             |    1227      | fuft-no_inf.yml       |
+| gpt2       | LoRA               | Yes | 8xV100 |    3   |    3.74    |   3.60    |      8.0      |    1128      | peft-eps_8.yml        |
+| gpt2       | LoRA               | Yes | 1xV100 |    3   |    3.74    |   3.60    |      8.0      |    12248     | peft-eps_8-gpus_1.yml |
+| gpt2       | LoRA               | No  | 8xV100 |    3   |    3.70    |   3.58    | -             |    1006      | peft-eps_inf.yml      |
 
-## Fine-tune the full model with DP
+
+## Azure Machine Learning
+
+We provide Azure Machine Learning (AML) configuration files for the above experiments.
+
+```
+az ml job create --file aml/<aml config>
+```
+
+
+## Local Training
+
+Alternatively, you can run the training script directly on your local machine.
+
+Install the environment (assuming CUDA 11.6) with
+
+```
+conda env create -f environment.yml
+conda activate dp-transformers
+```
+
+And run one of the following training scripts.
+
+### Fine-tune the full model with DP
 
 ```
 python -m torch.distributed.run --nproc_per_node 16 fine-tune-dp.py \
@@ -41,10 +64,11 @@ python -m torch.distributed.run --nproc_per_node 16 fine-tune-dp.py \
 --lr_scheduler_type constant \
 --learning_rate 1e-4 \
 --disable_tqdm True \
---dataloader_num_workers 2
+--dataloader_num_workers 2 \
+--label_names labels
 ```
 
-## Fine-tune the full model without DP
+### Fine-tune the full model without DP
 
 ```
 python -m torch.distributed.run --nproc_per_node 16 fine-tune-nodp.py \
@@ -68,10 +92,11 @@ python -m torch.distributed.run --nproc_per_node 16 fine-tune-nodp.py \
 --lr_scheduler_type constant \
 --learning_rate 2e-4 \
 --disable_tqdm True \
---dataloader_num_workers 2
+--dataloader_num_workers 2 \
+--label_names labels
 ```
 
-## Fine-tune only the LoRA layers introduced into the model with DP
+### Fine-tune only the LoRA layers introduced into the model with DP
 
 ```
 python -m torch.distributed.run --nproc_per_node 16 fine-tune-dp.py \
@@ -100,10 +125,11 @@ python -m torch.distributed.run --nproc_per_node 16 fine-tune-dp.py \
 --lr_scheduler_type constant \
 --learning_rate 3e-4 \
 --disable_tqdm True \
---dataloader_num_workers 2
+--dataloader_num_workers 2 \
+--label_names labels
 ```
 
-## Fine-tune only the LoRA layers introduced into the model without DP
+### Fine-tune only the LoRA layers introduced into the model without DP
 
 ```
 python -m torch.distributed.run --nproc_per_node 16 fine-tune-nodp.py \
@@ -130,5 +156,6 @@ python -m torch.distributed.run --nproc_per_node 16 fine-tune-nodp.py \
 --lr_scheduler_type constant \
 --learning_rate 5e-4 \
 --disable_tqdm True \
---dataloader_num_workers 2
+--dataloader_num_workers 2 \
+--label_names labels
 ```
