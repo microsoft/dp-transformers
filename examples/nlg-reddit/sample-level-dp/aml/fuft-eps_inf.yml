@@ -28,6 +28,6 @@ environment:
   image: mcr.microsoft.com/azureml/openmpi4.1.0-cuda11.6-cudnn8-ubuntu20.04
   conda_file: ../environment.yml
 compute: azureml:ND40rsv2
-display_name: full_fine_tuning-epsilon_8
+display_name: full_fine_tuning-epsilon_inf
 experiment_name: dp-transformers-nlg-reddit-sample-level-dp
 description: Train a model on the Reddit dataset using differential privacy
