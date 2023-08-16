@@ -110,4 +110,8 @@ python -m torch.distributed.run --nproc_per_node 8 run-classification.py \
     --disable_tqdm True
 ```
 
+## Using LoRA during fine-tuning
 
+Although not used in the paper, LoRA fine-tuning significantly improves the runtime by allowing much larger
+batch sizes to fit in each GPU. A starting point could be to add `--lora_dim 4 --lora_alpha 32 --lora_dropout 0.0`
+and use larger learning rates such as `--learning_rate 3e-4` or `4e-4`.
