@@ -25,7 +25,7 @@ command: >-
     --dataloader_num_workers 2 \
     --label_names labels
 environment:
-  image: mcr.microsoft.com/azureml/openmpi4.1.0-cuda11.6-cudnn8-ubuntu20.04
+  image: mcr.microsoft.com/azureml/openmpi4.1.0-cuda11.8-cudnn8-ubuntu22.04
   conda_file: ../environment.yml
 compute: azureml:ND40rsv2
 display_name: full_fine_tuning-epsilon_inf
