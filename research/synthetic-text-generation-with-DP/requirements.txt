@@ -4,6 +4,6 @@ scikit-learn
 torch==1.12.1
 transformers==4.20.1
 datasets==2.0.0
-prv-accountant==0.1.0
+prv-accountant==0.1.1.post1
 opacus==1.2.0
-git+https://github.com/microsoft/dp-transformers.git
+git+https://github.com/microsoft/dp-transformers.git@39fb6878623594cb0ab1c9a273058487b8f8a710
