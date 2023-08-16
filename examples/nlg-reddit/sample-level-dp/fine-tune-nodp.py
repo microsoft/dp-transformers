@@ -10,8 +10,8 @@ import sys
 import logging
 
 from dataclasses import dataclass, field
-from dp_transformers.layers.dp_merged_linear import mark_only_lora_as_trainable
-from dp_transformers.module_modification import convert_gpt2_attention_to_lora
+from dataclasses import dataclass, field, asdict
+from peft import get_peft_model, LoraConfig
 
 
 logger = logging.getLogger(__name__)
@@ -22,28 +22,40 @@ class ModelArguments:
     model_name: str = field(default="gpt2", metadata={
         "help": "Model name in HuggingFace, e.g. 'gpt2'"
     })
-
-    lora_dim: int = field(default=0, metadata={
-        "help": "LoRA dimension; 0 means LoRA is disabled"
-    })
-
     sequence_len: int = field(default=128, metadata={
-        "help": "Model sequence length"
+        "help": "Maximum sequence length"
     })
 
+
+@dataclass
+class LoraArguments:
+    enable_lora: bool = field(default=False, metadata={
+        "help": "Whether to enable LoRA"
+    })
+    lora_dim: int = field(default=8, metadata={
+        "help": "LoRA dimension"
+    })
+    lora_alpha: int = field(default=8, metadata={
+        "help": "LoRA alpha"
+    })
     lora_dropout: float = field(default=0.0, metadata={
-        "help": "Dropout probability for LoRA layers"
+        "help": "LoRA dropout"
     })
 
-    lora_alpha: int = field(default=32, metadata={
-        "help": "LoRA attention alpha"
-    })
+    def as_peft_config(self) -> LoraConfig:
+        if not self.enable_lora:
+            raise ValueError("LoRA is not enabled, cannot convert to LoRA config")
+        params = asdict(self)
+        params.pop("enable_lora")
+        params["r"] = params.pop("lora_dim")
+        return LoraConfig(**params)
 
 
 @dataclass
 class Arguments:
     train: dp_transformers.TrainingArguments
     model: ModelArguments
+    lora: LoraArguments
 
 
 def main(args: Arguments):
@@ -88,12 +100,11 @@ def main(args: Arguments):
             batched=True, num_proc=8, desc="tokenizing dataset", remove_columns=dataset.column_names['train']
         )
 
-    if args.model.lora_dim > 0:
-        model = convert_gpt2_attention_to_lora(
-            model, r=args.model.lora_dim, lora_alpha=args.model.lora_alpha, lora_dropout=args.model.lora_dropout,
-            enable_lora=[True, False, True], merge_weights=False
-        )
-        mark_only_lora_as_trainable(model)
+    if args.lora.enable_lora:
+        logger.info("Using LoRA")
+        model = get_peft_model(model=model, peft_config=args.lora.as_peft_config())
+    else:
+        logger.info("Not using LoRA")
 
     if train_args.local_rank == 0:
         logger.info(f"Total number of parameters of the model: {model.num_parameters(only_trainable=False)}")
@@ -115,6 +126,6 @@ def main(args: Arguments):
     trainer.train()
 
 if __name__ == "__main__":
-    arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, ModelArguments))
+    arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, ModelArguments, LoraArguments))
     train_args, model_args = arg_parser.parse_args_into_dataclasses()
-    main(Arguments(train=train_args, model=model_args))
+    main(Arguments(train=train_args, model=model_args, lora=LoraArguments()))

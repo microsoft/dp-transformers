@@ -11,7 +11,6 @@ import logging
 
 from dataclasses import dataclass, field, asdict
 from peft import get_peft_model, LoraConfig
-from typing import Optional
 
 
 logger = logging.getLogger(__name__)
