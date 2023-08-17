@@ -17,6 +17,7 @@ from opacus.accountants import RDPAccountant
 from prv_accountant import Accountant as PRVAccountant
 from contextlib import contextmanager
 from typing import Any, Callable, List, Optional, Union, Dict, Sequence
+from accelerate.optimizer import AcceleratedOptimizer
 
 from dp_transformers import sampler, arguments
 
@@ -51,9 +52,13 @@ class DPCallback(TrainerCallback):
     def on_substep_end(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, optimizer=None, **kwargs):
         if optimizer is None:
             raise RuntimeError("Impossible to access optimizer from inside callback")
-        optimizer.signal_skip_step(do_skip=True)
-        optimizer.step()
-        optimizer.zero_grad()
+        if isinstance(optimizer, AcceleratedOptimizer):
+            dp_optimizer = optimizer.optimizer
+        else:
+            dp_optimizer = optimizer
+        dp_optimizer.signal_skip_step(do_skip=True)
+        dp_optimizer.step()
+        dp_optimizer.zero_grad()
 
         self.on_substep_end_was_called = True
 

@@ -12,6 +12,8 @@ import logging
 from dataclasses import dataclass, field, asdict
 from peft import get_peft_model, LoraConfig
 
+from dp_transformers.grad_sample.transformers import conv_1d
+
 
 logger = logging.getLogger(__name__)
 
@@ -129,10 +131,6 @@ def main(args: Arguments):
     model = model.cuda()
     model.train()
 
-    if args.model.lora_dim > 0:
-        from dp_transformers.grad_sample.lora import lora_layer
-    else:
-        from dp_transformers.grad_sample.transformers import conv_1d
 
     data_collator = dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer)
 

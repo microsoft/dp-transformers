@@ -127,5 +127,5 @@ def main(args: Arguments):
 
 if __name__ == "__main__":
     arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, ModelArguments, LoraArguments))
-    train_args, model_args = arg_parser.parse_args_into_dataclasses()
-    main(Arguments(train=train_args, model=model_args, lora=LoraArguments()))
+    train_args, model_args, lora_args = arg_parser.parse_args_into_dataclasses()
+    main(Arguments(train=train_args, model=model_args, lora=lora_args))
