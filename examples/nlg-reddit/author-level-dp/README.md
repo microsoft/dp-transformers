@@ -41,6 +41,7 @@ python -m torch.distributed.run --nproc_per_node 16 fine-tune-dp.py \
 --lr_scheduler_type constant \
 --learning_rate 1e-4 \
 --disable_tqdm True \
+--label_names labels \
 --dataloader_num_workers 2
 ```
 
@@ -73,5 +74,7 @@ python -m torch.distributed.run --nproc_per_node 16 fine-tune-dp.py \
 --lr_scheduler_type constant \
 --learning_rate 3e-4 \
 --disable_tqdm True \
---dataloader_num_workers 2
+--dataloader_num_workers 2 \
+--label_names labels \
+--enable_lora
 ```

@@ -24,15 +24,15 @@ setup(
     extras_require={
         "test": [
             "pytest",
-            "loralib"
         ]
     },
     install_requires=[
-        "transformers>=4.20.1,<=4.28.1",
-        "datasets>=2.0.0,<=2.6.1",
-        "opacus>=1.1.3,<1.3.0",
-        "prv-accountant<0.2.0",
-        "torch>=1.9.1,<1.13.0",
+        "transformers>=4.30.0",
+        "datasets>=2.0.0",
+        "opacus>=1.3.0",
+        "peft",
+        "prv_accountant<0.2.0",
+        "torch>=1.13.1",
     ],
     test_suite="tests",
     zip_safe=False
