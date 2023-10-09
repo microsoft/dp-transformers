@@ -1,50 +1,104 @@
 import pytest
 import os
 import json
+import configparser
 
-from subprocess import check_call, check_output
+from subprocess import check_output
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Union
 from azureml.core import Workspace, Run
+from dataclasses import dataclass
+from datetime import timedelta, datetime
 
 
 @pytest.fixture(scope="session")
-def setup_az_workspace() -> Workspace:
-    workspace = Workspace(
-        subscription_id=os.environ["AZ_SUBSCRIPTION_ID"],
-        resource_group=os.environ["AZ_RESOURCE_GROUP"],
-        workspace_name=os.environ["AZ_WORKSPACE_NAME"],
-    )
+def az_workspace() -> Workspace:
+    subscription_id = json.loads(check_output(["az", "account", "show", "--query", "id"]))
 
-    requires_login = False
-    if requires_login:
-        check_call([
-            "az", "login", "--service-principal", "-u", "<app-id>", "-p", "<password-or-cert>", "--tenant", "<tenant>"
-        ])
-    check_call(["az", "account", "set", "--subscription", workspace.subscription_id])
-    check_call(["az", "configure", "--defaults", f"workspace={workspace.name}", f"group={workspace.resource_group}"])
+    output = json.loads(check_output(["az", "configure", "--list-defaults"]))
+    resource_group = next(item for item in output if item["name"] == "group")["value"]
+    workspace_name = next(item for item in output if item["name"] == "workspace")["value"]
+
+    workspace = Workspace(
+        subscription_id=subscription_id,
+        resource_group=resource_group,
+        workspace_name=workspace_name,
+    )
 
     return workspace
 
 
-def submit_example_and_wait_for_metrics(ws: Workspace, example_path: Path) -> Dict:
-    raw_output = check_output(["az", "ml", "job", "create", "--file", example_path])
+def submit_example_and_wait_for_metrics(ws: Workspace, aml_config_path: Path) -> Dict[str, Union[float, int]]:
+    raw_output = check_output(["az", "ml", "job", "create", "--file", aml_config_path])
     output = json.loads(raw_output)
     run = Run.get(ws, run_id=output["name"])
-
-    run.wait_for_completion()
+    try:
+        run.wait_for_completion()
+    except KeyboardInterrupt as e:
+        run.cancel()
+        raise e
 
     metrics = run.get_metrics()
 
-    breakpoint()
+    details = run.get_details()
+
+    metrics["runtime"] = (
+        datetime.strptime(details["endTimeUtc"], '%Y-%m-%dT%H:%M:%S.%fZ') -
+        datetime.strptime(details["startTimeUtc"], '%Y-%m-%dT%H:%M:%S.%fZ')
+    )
+
     return metrics
 
 
-class TestExamples:
-    @pytest.mark.parametrize("example_path", [
-        "peft-eps_inf.yml"
-    ])
-    def test_nlg_reddit_sample_level_dp(self, setup_az_workspace, example_path: str):
-        ws = setup_az_workspace
-        metrics = submit_example_and_wait_for_metrics(ws, Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/example_path)
-        pass
+@dataclass
+class ExampleTest:
+    aml_config_path: Path
+    expected_trn_loss: float
+    expected_val_loss: float
+    expected_time: timedelta
+
+
+@pytest.mark.parametrize("example_test", [
+    ExampleTest(
+        aml_config_path=Path("examples")/"nlg-reddit"/"author-level-dp"/"aml"/"fuft-eps_8.yml",
+        expected_trn_loss=3.72,
+        expected_val_loss=3.58,
+        expected_time=timedelta(minutes=39),
+    ),
+    ExampleTest(
+        aml_config_path=Path("examples")/"nlg-reddit"/"author-level-dp"/"aml"/"peft-eps_8.yml",
+        expected_trn_loss=3.72,
+        expected_val_loss=3.58,
+        expected_time=timedelta(minutes=39),
+    ),
+    ExampleTest(
+        aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"fuft-eps_8.yml",
+        expected_trn_loss=3.72,
+        expected_val_loss=3.58,
+        expected_time=timedelta(minutes=39),
+    ),
+    ExampleTest(
+        aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"fuft-eps_inf.yml",
+        expected_trn_loss=3.72,
+        expected_val_loss=3.58,
+        expected_time=timedelta(minutes=39),
+    ),
+    ExampleTest(
+        aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"peft-eps_8.yml",
+        expected_trn_loss=3.72,
+        expected_val_loss=3.58,
+        expected_time=timedelta(minutes=39),
+    ),
+    ExampleTest(
+        aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"peft-eps_inf.yml",
+        expected_trn_loss=3.72,
+        expected_val_loss=3.58,
+        expected_time=timedelta(minutes=39),
+    ),
+])
+def test_nlg_reddit(az_workspace, example_test: ExampleTest):
+    metrics = submit_example_and_wait_for_metrics(az_workspace, aml_config_path=example_test.aml_config_path)
+
+    assert metrics["train_loss"] == pytest.approx(example_test.expected_trn_loss, abs=0.02)
+    assert metrics["eval_loss"][-1] == pytest.approx(example_test.expected_val_loss, abs=0.02)
+    assert abs(metrics["runtime"] - example_test.expected_time) < timedelta(minutes=3)

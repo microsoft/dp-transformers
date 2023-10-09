@@ -3,26 +3,22 @@ name: Test examples
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
 
 jobs:
-  run:
+  build:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        example: [
-          "examples/nlg-reddit/sample-level-dp",
-          "examples/nlg-reddit/author-level-dp"
-        ]
+
     steps:
     - uses: actions/checkout@v3
-    - uses: conda-incubator/setup-miniconda@v2
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v3
       with:
-        activate-environment: env
-        environment-file: ${{ matrix.example }}/environment.yml
-        auto-activate-base: false
-    - name: Install package
+        python-version: 3.9
+    - name: Install dependencies
       run: |
-        /usr/share/miniconda/envs/env/bin/pip install -e .
+        az extension add -n ml
+        python -m pip install --upgrade pip
+        python -m pip install pytest pytest-xdist azureml-core
+    - name: Run examples with pytest
+      run: |
+        pytest -n 16 examples
