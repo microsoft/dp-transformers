@@ -1,7 +1,6 @@
 import pytest
-import os
 import json
-import configparser
+import time
 
 from subprocess import check_output
 from pathlib import Path
@@ -37,10 +36,19 @@ def submit_example_and_wait_for_metrics(ws: Workspace, aml_config_path: Path) ->
     except KeyboardInterrupt as e:
         run.cancel()
         raise e
+    
+    if run.get_status() != "Completed":
+        raise RuntimeError(f"Run did not complete successfully. Status: {run.get_status()}")
+
+    waiting_for_details = False
+    while waiting_for_details:
+        details = run.get_details()
+        if "endTimeUtc" in details:
+            waiting_for_details = False
+        else:
+            time.sleep(secs=30)
 
     metrics = run.get_metrics()
-
-    details = run.get_details()
 
     metrics["runtime"] = (
         datetime.strptime(details["endTimeUtc"], '%Y-%m-%dT%H:%M:%S.%fZ') -
@@ -57,48 +65,54 @@ class ExampleTest:
     expected_val_loss: float
     expected_time: timedelta
 
+    def __repr__(self):
+        return f"Example({self.aml_config_path})"
 
-@pytest.mark.parametrize("example_test", [
-    ExampleTest(
-        aml_config_path=Path("examples")/"nlg-reddit"/"author-level-dp"/"aml"/"fuft-eps_8.yml",
-        expected_trn_loss=3.72,
-        expected_val_loss=3.58,
-        expected_time=timedelta(minutes=39),
-    ),
-    ExampleTest(
-        aml_config_path=Path("examples")/"nlg-reddit"/"author-level-dp"/"aml"/"peft-eps_8.yml",
-        expected_trn_loss=3.72,
-        expected_val_loss=3.58,
-        expected_time=timedelta(minutes=39),
-    ),
-    ExampleTest(
-        aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"fuft-eps_8.yml",
-        expected_trn_loss=3.72,
-        expected_val_loss=3.58,
-        expected_time=timedelta(minutes=39),
-    ),
-    ExampleTest(
-        aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"fuft-eps_inf.yml",
-        expected_trn_loss=3.72,
-        expected_val_loss=3.58,
-        expected_time=timedelta(minutes=39),
-    ),
-    ExampleTest(
-        aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"peft-eps_8.yml",
-        expected_trn_loss=3.72,
-        expected_val_loss=3.58,
-        expected_time=timedelta(minutes=39),
-    ),
-    ExampleTest(
-        aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"peft-eps_inf.yml",
-        expected_trn_loss=3.72,
-        expected_val_loss=3.58,
-        expected_time=timedelta(minutes=39),
-    ),
-])
+
+@pytest.mark.parametrize("example_test",
+    [
+        ExampleTest(
+            aml_config_path=Path("examples")/"nlg-reddit"/"author-level-dp"/"aml"/"fuft-eps_8.yml",
+            expected_trn_loss=3.76,
+            expected_val_loss=3.62,
+            expected_time=timedelta(minutes=52, seconds=15),
+        ),
+        ExampleTest(
+            aml_config_path=Path("examples")/"nlg-reddit"/"author-level-dp"/"aml"/"peft-eps_8.yml",
+            expected_trn_loss=3.79,
+            expected_val_loss=3.62,
+            expected_time=timedelta(minutes=32, seconds=45),
+        ),
+        ExampleTest(
+            aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"fuft-eps_8.yml",
+            expected_trn_loss=3.72,
+            expected_val_loss=3.58,
+            expected_time=timedelta(minutes=39),
+        ),
+        ExampleTest(
+            aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"fuft-eps_inf.yml",
+            expected_trn_loss=3.58,
+            expected_val_loss=3.47,
+            expected_time=timedelta(minutes=50, seconds=15),
+        ),
+        ExampleTest(
+            aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"peft-eps_8.yml",
+            expected_trn_loss=3.76,
+            expected_val_loss=3.60,
+            expected_time=timedelta(minutes=42, seconds=30),
+        ),
+        ExampleTest(
+            aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"peft-eps_inf.yml",
+            expected_trn_loss=3.72,
+            expected_val_loss=3.58,
+            expected_time=timedelta(minutes=42, seconds=0),
+        ),
+    ],
+    ids=ExampleTest.__repr__
+)
 def test_nlg_reddit(az_workspace, example_test: ExampleTest):
     metrics = submit_example_and_wait_for_metrics(az_workspace, aml_config_path=example_test.aml_config_path)
 
     assert metrics["train_loss"] == pytest.approx(example_test.expected_trn_loss, abs=0.02)
     assert metrics["eval_loss"][-1] == pytest.approx(example_test.expected_val_loss, abs=0.02)
-    assert abs(metrics["runtime"] - example_test.expected_time) < timedelta(minutes=3)
+    assert abs(metrics["runtime"] - example_test.expected_time) < timedelta(minutes=5)

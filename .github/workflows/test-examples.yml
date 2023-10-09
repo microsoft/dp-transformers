@@ -17,6 +17,9 @@ jobs:
     - name: Install dependencies
       run: |
         az extension add -n ml
+        az login --service-prinicipal -u $$service_principal_id -p $$service_principal_password --tenant $$tenant_id
+        az account --set $$subscription_id
+        az configure --defaults group=$$resource_group workspace=$$workspace_name
         python -m pip install --upgrade pip
         python -m pip install pytest pytest-xdist azureml-core
     - name: Run examples with pytest
