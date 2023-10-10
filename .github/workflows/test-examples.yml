@@ -25,7 +25,7 @@ jobs:
     - name: Set up Azure ML CLI
       run: |
         az login --service-principal -u "${{ secrets.AZ_CLIENT_ID }}" -p "${{ secrets.AZ_CLIENT_SECRET }}" --tenant "${{ secrets.AZ_TENANT_ID }}"
-        az account --set "${{ secrets.AZ_SUBSCRIPTION_ID }}"
+        az account set --subscription "${{ secrets.AZ_SUBSCRIPTION_ID }}"
         az configure --defaults group=${{ secrets.AZ_RESOURCE_GROUP }} workspace=${{ secrets.AZ_WORKSPACE_NAME }}
     - name: Run examples with pytest
       run: |
