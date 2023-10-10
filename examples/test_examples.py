@@ -31,9 +31,13 @@ def submit_example_and_wait_for_metrics(ws: Workspace, aml_config_path: Path) ->
     raw_output = check_output(["az", "ml", "job", "create", "--file", aml_config_path])
     output = json.loads(raw_output)
     run = Run.get(ws, run_id=output["name"])
+    print(f"Submitted run {run.get_portal_url()}")
     try:
         run.wait_for_completion()
     except KeyboardInterrupt as e:
+        run.cancel()
+        raise e
+    except Exception as e:
         run.cancel()
         raise e
     
@@ -46,7 +50,7 @@ def submit_example_and_wait_for_metrics(ws: Workspace, aml_config_path: Path) ->
             time.sleep(secs=30)
 
     if run.get_status() != "Completed":
-        raise RuntimeError(f"Run did not complete successfully. Status: {run.get_status()}")
+        raise RuntimeError(f"Run did not complete successfully. Status: {run.get_status()}, AML URL: {run.get_portal_url()}")
 
 
     metrics = run.get_metrics()
