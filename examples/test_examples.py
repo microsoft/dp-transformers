@@ -37,16 +37,17 @@ def submit_example_and_wait_for_metrics(ws: Workspace, aml_config_path: Path) ->
         run.cancel()
         raise e
     
-    if run.get_status() != "Completed":
-        raise RuntimeError(f"Run did not complete successfully. Status: {run.get_status()}")
-
-    waiting_for_details = False
+    waiting_for_details = True
     while waiting_for_details:
         details = run.get_details()
         if "endTimeUtc" in details:
             waiting_for_details = False
         else:
             time.sleep(secs=30)
+
+    if run.get_status() != "Completed":
+        raise RuntimeError(f"Run did not complete successfully. Status: {run.get_status()}")
+
 
     metrics = run.get_metrics()
 
