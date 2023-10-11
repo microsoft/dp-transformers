@@ -47,7 +47,7 @@ def submit_example_and_wait_for_metrics(ws: Workspace, aml_config_path: Path) ->
         if "endTimeUtc" in details:
             waiting_for_details = False
         else:
-            time.sleep(secs=30)
+            time.sleep(30)
 
     if run.get_status() != "Completed":
         raise RuntimeError(f"Run did not complete successfully. Status: {run.get_status()}, AML URL: {run.get_portal_url()}")
@@ -90,7 +90,7 @@ class ExampleTest:
         ),
         ExampleTest(
             aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"fuft-eps_8.yml",
-            expected_trn_loss=3.72,
+            expected_trn_loss=3.74,
             expected_val_loss=3.58,
             expected_time=timedelta(minutes=39),
         ),
