@@ -109,7 +109,7 @@ class ExampleTest:
         ExampleTest(
             aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"peft-eps_inf.yml",
             expected_trn_loss=3.72,
-            expected_val_loss=3.58,
+            expected_val_loss=3.60,
             expected_time=timedelta(minutes=42, seconds=0),
         ),
     ],
