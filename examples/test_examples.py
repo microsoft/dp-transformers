@@ -70,7 +70,7 @@ class ExampleTest:
     expected_val_loss: float
     expected_time: timedelta
 
-    def __repr__(self):
+    def __str__(self):
         return f"Example({self.aml_config_path})"
 
 
@@ -113,7 +113,7 @@ class ExampleTest:
             expected_time=timedelta(minutes=42, seconds=0),
         ),
     ],
-    ids=ExampleTest.__repr__
+    ids=str
 )
 def test_nlg_reddit(az_workspace, example_test: ExampleTest):
     metrics = submit_example_and_wait_for_metrics(az_workspace, aml_config_path=example_test.aml_config_path)
