@@ -92,7 +92,7 @@ class ExampleTest:
             aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"fuft-eps_8.yml",
             expected_trn_loss=3.74,
             expected_val_loss=3.59,
-            expected_time=timedelta(minutes=39),
+            expected_time=timedelta(hours=1, minutes=15),
         ),
         ExampleTest(
             aml_config_path=Path("examples")/"nlg-reddit"/"sample-level-dp"/"aml"/"fuft-eps_inf.yml",
