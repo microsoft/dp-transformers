@@ -3,8 +3,9 @@
 
 import pandas as pd
 import datasets
-from datasets import Dataset
 import torch
+import opacus
+from datasets import Dataset
 from torch import nn
 from torch.utils.data import DataLoader
 from transformers import (
@@ -12,9 +13,6 @@ from transformers import (
     DataCollatorForLanguageModeling, PreTrainedTokenizer, training_args, modeling_utils
 )
 from transformers.file_utils import is_sagemaker_mp_enabled, is_datasets_available
-import opacus
-from opacus.accountants import RDPAccountant
-from prv_accountant import Accountant as PRVAccountant
 from contextlib import contextmanager
 from typing import Any, Callable, List, Optional, Union, Dict, Sequence
 from accelerate.optimizer import AcceleratedOptimizer
@@ -33,16 +31,12 @@ class DPCallback(TrainerCallback):
         noise_multiplier: float,
         target_delta: float,
         sampling_probability: float,
-        rdp_accountant: RDPAccountant,
-        prv_accountant: PRVAccountant,
         max_epsilon: float = float('inf')
     ) -> None:
 
         self.noise_multiplier = noise_multiplier
         self.target_delta = target_delta
         self.sampling_probability = sampling_probability
-        self.rdp_accountant = rdp_accountant
-        self.prv_accountant = prv_accountant
 
         self.max_epsilon = max_epsilon
         self.on_substep_end_was_called = False
@@ -160,51 +154,42 @@ class OpacusDPTrainer(Trainer):
             author_mapping = [[i] for i in range(len(train_dataset))]
         self.author_mapping = author_mapping
 
-        if not self.privacy_args.is_initialized:
-            self.privacy_args.initialize(
-                sampling_probability=self.sampling_probability,
-                num_steps=self.num_steps,
-                num_samples=len(self.author_mapping),
-            )
+        if not self.privacy_args.disable_dp:
+            if self.args.gradient_accumulation_steps > 1:
+                raise NotImplementedError(
+                    "DP currently doesn't support gradient accumulation via the Huggingface trainer. "
+                    "Use --max_physical_per_device_train_batch_size which will automatically limit "
+                    "the number of samples simulatenously processed."
+                )
 
-        # Wrap model in DDP and GradSampleModule
-        if args.parallel_mode == training_args.ParallelMode.DISTRIBUTED:
-            logger.info(f"Wrapping the model with DPDDP in distributed training.")
-            model = opacus.distributed.DifferentiallyPrivateDistributedDataParallel(model)
+            # Wrap model in DDP and GradSampleModule
+            if args.parallel_mode == training_args.ParallelMode.DISTRIBUTED:
+                logger.info(f"Wrapping the model with DPDDP in distributed training.")
+                model = opacus.distributed.DifferentiallyPrivateDistributedDataParallel(model)
 
-        model = GradSampleModule(model)
+            model = GradSampleModule(model)
 
-        # Instantiate privacy accountants
-        self.rdp_accountant = RDPAccountant()
-        self.prv_accountant = PRVAccountant(
-            noise_multiplier=self.privacy_args.noise_multiplier,
-            sampling_probability=self.sampling_probability,
-            delta=self.privacy_args.target_delta,
-            eps_error=0.1,
-            max_compositions=self.num_steps
-        )
+            self.privacy_engine = opacus.PrivacyEngine(secure_mode=self.privacy_args.secure_mode)
 
-        # Set up callback for accounting and handling grad acc
-        self.dp_callback = DPCallback(
-            noise_multiplier=self.privacy_args.noise_multiplier,
-            target_delta=self.privacy_args.target_delta,
-            sampling_probability=self.sampling_probability,
-            rdp_accountant=self.rdp_accountant,
-            prv_accountant=self.prv_accountant
-        )
+            if self.privacy_args.noise_multiplier is None:
+                dp_model, dp_optimizer, dp_train_dataloader = self.privacy_engine.make_private_with_epsilon(
+                    max_grad_norm=self.privacy_args.per_sample_max_grad_norm,
+                    module=model,
+                    target_epsilon=self.privacy_args.target_epsilon,
+                    data_loader=self.get_train_dataloader(),
+                    target_delta=self.privacy_args.target_delta
+                )
+            else:
+                dp_model, dp_optimizer, dp_train_dataloader = self.privacy_engine.make_private(
+                    max_grad_norm=self.privacy_args.per_sample_max_grad_norm,
+                    noise_multiplier=self.privacy_args.noise_multiplier,
+                    max_grad_norm_clip=self.privacy_args.per_sample_max_grad_norm,
+                    target_delta=self.privacy_args.target_delta
+                )
+
+
         super().__init__(model=model, args=args, train_dataset=train_dataset, callbacks=[self.dp_callback], **kwargs)
 
-        self.get_rdp_epsilon = lambda: self.rdp_accountant.get_epsilon(self.privacy_args.target_delta)  # RDP epsilon
-        self.get_prv_epsilon = lambda: self.prv_accountant.compute_epsilon(self.state.global_step)[2]
-
-    @property
-    def sampling_probability(self) -> float:
-        return self.train_args.per_device_train_batch_size * self.train_args.world_size * \
-            self.train_args.gradient_accumulation_steps / len(self.author_mapping)
-
-    @property
-    def num_steps(self) -> int:
-        return int(self.train_args.num_train_epochs * (1 / self.sampling_probability + 1))
 
     def create_optimizer(self):
         _ = super().create_optimizer()
