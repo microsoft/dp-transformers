@@ -30,6 +30,9 @@ class PrivacyArguments:
     secure_mode: bool = field(default=False, metadata={
         "help": "Use secure mode for DP-SGD."
     })
+    max_physical_per_device_train_batch_size: Optional[int] = field(default=None, metadata={
+        "help": "Maximum physical batch size per device for training."
+    })
 
     def __post_init__(self):
         if self.disable_dp:
@@ -37,6 +40,8 @@ class PrivacyArguments:
             self.noise_multiplier = 0.0
             self.per_sample_max_grad_norm = float('inf')
             self.target_epsilon = None
+            if self.max_physical_per_device_train_batch_size is not None:
+                raise ValueError("DP training is disabled, --max_physical_per_device_train_batch_size is not needed.")
         else:
             if bool(self.target_epsilon) == bool(self.noise_multiplier):
                 raise ValueError("Exactly one of the arguments --target_epsilon and --noise_multiplier must be used.")
