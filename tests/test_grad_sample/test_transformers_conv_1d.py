@@ -18,6 +18,6 @@ class TestConv1D(GradSampleHooks_test):
         """
         x = torch.randn(16, 8)
         layer = Conv1D(4, 8)
-        self.run_test(x, layer, batch_first=True)
+        self.run_test(x, layer, batch_first=True, ew_compatible=False)
 
-        self.run_test(torch.randn(24, 8, 8), Conv1D(4, 8), batch_first=True)
+        self.run_test(torch.randn(24, 8, 8), Conv1D(4, 8), batch_first=True, ew_compatible=False)

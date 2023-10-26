@@ -6,15 +6,13 @@
 import datasets
 import dp_transformers
 import transformers
-import opacus
 import sys
 import logging
-import prv_accountant
 
-from dataclasses import dataclass, field
-from transformers.training_args import ParallelMode
-from dp_transformers.layers.dp_merged_linear import mark_only_lora_as_trainable
-from dp_transformers.module_modification import convert_gpt2_attention_to_lora
+from dataclasses import dataclass, field, asdict
+from peft import get_peft_model, LoraConfig
+
+from dp_transformers.grad_sample.transformers import conv_1d
 
 
 logger = logging.getLogger(__name__)
@@ -26,21 +24,33 @@ class ModelArguments:
         "help": "Model name in HuggingFace, e.g. 'gpt2'"
     })
 
-    lora_dim: int = field(default=0, metadata={
-        "help": "LoRA dimension; 0 means LoRA is disabled"
-    })
-
     sequence_len: int = field(default=128, metadata={
         "help": "Model sequence length"
     })
 
+
+@dataclass
+class LoraArguments:
+    enable_lora: bool = field(default=False, metadata={
+        "help": "Whether to enable LoRA"
+    })
+    lora_dim: int = field(default=8, metadata={
+        "help": "LoRA dimension"
+    })
+    lora_alpha: int = field(default=8, metadata={
+        "help": "LoRA alpha"
+    })
     lora_dropout: float = field(default=0.0, metadata={
-        "help": "Dropout probability for LoRA layers"
+        "help": "LoRA dropout"
     })
 
-    lora_alpha: int = field(default=32, metadata={
-        "help": "LoRA attention alpha"
-    })
+    def as_peft_config(self) -> LoraConfig:
+        if not self.enable_lora:
+            raise ValueError("LoRA is not enabled, cannot convert to LoRA config")
+        params = asdict(self)
+        params.pop("enable_lora")
+        params["r"] = params.pop("lora_dim")
+        return LoraConfig(**params)
 
 
 @dataclass
@@ -48,6 +58,7 @@ class Arguments:
     train: dp_transformers.TrainingArguments
     privacy: dp_transformers.PrivacyArguments
     model: ModelArguments
+    lora: LoraArguments
 
 
 def main(args: Arguments):
@@ -107,12 +118,11 @@ def main(args: Arguments):
     if train_args.local_rank == 0 or train_args.local_rank == -1:
         logger.info(f"Number of authors in the training set: {len(author_mapping)}")
 
-    if args.model.lora_dim > 0:
-        model = convert_gpt2_attention_to_lora(
-            model, r=args.model.lora_dim, lora_alpha=args.model.lora_alpha, lora_dropout=args.model.lora_dropout,
-            enable_lora=[True, False, True], merge_weights=False
-        )
-        mark_only_lora_as_trainable(model)
+    if args.lora.enable_lora:
+        logger.info("Using LoRA")
+        model = get_peft_model(model=model, peft_config=args.lora.as_peft_config())
+    else:
+        logger.info("Not using LoRA")
 
     if train_args.local_rank == 0 or train_args.local_rank == -1:
         logger.info(f"Total number of parameters of the model: {model.num_parameters(only_trainable=False)}")
@@ -121,10 +131,6 @@ def main(args: Arguments):
     model = model.cuda()
     model.train()
 
-    if args.model.lora_dim > 0:
-        from dp_transformers.grad_sample.lora import lora_layer
-    else:
-        from dp_transformers.grad_sample.transformers import conv_1d
 
     data_collator = dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer)
 
@@ -149,6 +155,6 @@ def main(args: Arguments):
         })
 
 if __name__ == "__main__":
-    arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, dp_transformers.PrivacyArguments, ModelArguments))
-    train_args, privacy_args, model_args = arg_parser.parse_args_into_dataclasses()
-    main(Arguments(train=train_args, privacy=privacy_args, model=model_args))
+    arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, dp_transformers.PrivacyArguments, ModelArguments, LoraArguments ))
+    train_args, privacy_args, model_args, lora_args = arg_parser.parse_args_into_dataclasses()
+    main(Arguments(train=train_args, privacy=privacy_args, model=model_args, lora=lora_args))
