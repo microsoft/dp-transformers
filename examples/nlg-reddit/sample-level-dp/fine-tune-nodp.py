@@ -91,7 +91,7 @@ def main(args: Arguments):
 
     # Load tokenizer
     tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name)
-    tokenizer.pad_token = -100 # Set a dummy pad token we don't use it anyway
+    tokenizer.pad_token = tokenizer.eos_token
 
     # Tokenize data
     with train_args.main_process_first(desc="tokenizing dataset"):

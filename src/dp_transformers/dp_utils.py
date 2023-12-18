@@ -247,11 +247,8 @@ class OpacusDPTrainer(Trainer):
         if is_sagemaker_mp_enabled():
             raise NotImplementedError("DP currently doesn't support this")
 
-        if self.use_cuda_amp or self.use_cpu_amp:
-            raise NotImplementedError("DP currently doesn't support this.")
-        else:
-            with self.compute_loss_context_manager():
-                loss = self.compute_loss(model, inputs)
+        with self.compute_loss_context_manager():
+            loss = self.compute_loss(model, inputs)
 
         if self.args.n_gpu > 1:
             loss = loss.mean()  # mean() to average on multi-gpu parallel training
@@ -261,11 +258,7 @@ class OpacusDPTrainer(Trainer):
         # that is returned in order for the logging to work correctly. Hence we scale the loss after the call to 
         # loss.backward()
 
-        if self.use_cuda_amp or self.use_cpu_amp:
-            raise NotImplementedError("DP currently doesn't support this")
-        elif self.use_apex:
-            raise NotImplementedError("DP currently doesn't support this")
-        elif self.deepspeed:
+        if self.use_apex:
             raise NotImplementedError("DP currently doesn't support this")
         else:
             loss.backward()
