@@ -13,8 +13,8 @@ We demonstrate examples of fine-tuning Mistral 7B using QLoRA with and without D
 
 | Dataset (HF) | DP  | GPUs   | Epochs | Min Eval Loss | Test ROUGE1 | Test ROUGE2 | Test ROUGEL | $\varepsilon$ | Run Time [s] | AML Config |
 | ------------ | --- | ------ | ------ | ------------- | ----------- | ----------- | ----------- | ------------- | ------------ | ---------- |
-| cnn          | Yes | 8xA100 |    3   |     0.9624    |   44.14     |    22.09    |   30.90     |      8.0      |    .         | cnn/peft-eps_8.yml |
-| cnn          | No  | 8xA100 |    3   |     0.9188    |   45.01     |    22.98    |   31.67     | -             |    .         | cnn/peft-eps_inf.yml |
+| cnn          | Yes | 8xA100 |    3   |     0.9624    |   44.16     |    22.16    |   30.99     |      8.0      |    .         | cnn/peft-eps_8.yml |
+| cnn          | No  | 8xA100 |    3   |     0.9188    |   45.05     |    22.99    |   31.69     | -             |    .         | cnn/peft-eps_inf.yml |
 
 ## Azure Machine Learning
 
