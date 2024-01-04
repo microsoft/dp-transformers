@@ -130,15 +130,9 @@ def main(args: Arguments):
     try:
         trainer.train()
     finally:
-        """
-        if args.privacy.disable_dp:
-            eps  = trainer.compute_epsilon()
-        else:
-            eps = float('inf')
-        trainer.log({
-            "final_epsilon": eps
-        })
-        """
+        eps  = trainer.compute_epsilon()
+        trainer.log({"final_epsilon": eps})
+
 
 if __name__ == "__main__":
     arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, dp_transformers.PrivacyArguments, ModelArguments, LoraArguments))

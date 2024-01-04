@@ -10,7 +10,7 @@ from opacus.utils.batch_memory_manager import wrap_data_loader
 from torch import nn
 from torch.utils.data import DataLoader
 from transformers import (
-    Trainer, TrainerCallback, TrainerState, TrainerControl, logging,
+    Trainer, TrainerCallback, TrainerState, TrainerControl, logging, DataCollator,
     DataCollatorForLanguageModeling, PreTrainedTokenizer, training_args, modeling_utils
 )
 from transformers.file_utils import is_sagemaker_mp_enabled, is_datasets_available
@@ -21,6 +21,7 @@ from accelerate.optimizer import AcceleratedOptimizer
 
 from dp_transformers import sampler, arguments
 from dp_transformers.data import AuthorIndexedDataset
+from dp_transformers.data_collators import DataCollatorWithEmptyWrapper, DataCollatorForPrivateCausalLanguageModeling
 
 logger = logging.get_logger(__name__)
 
@@ -38,13 +39,13 @@ class DPCallback(TrainerCallback):
         self.max_epsilon = max_epsilon
 
     def on_substep_end(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, optimizer=None, **kwargs):
-        raise ValueError("Shouldn't be called for DP.")
+        raise RuntimeError("Shouldn't be called for DP. Set --gradient_accumulation_steps to 1.")
 
     def on_step_end(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, optimizer=None, **kwargs):
         optimizer.zero_grad()  # Opacus is bothered that HF does not call .zero_grad() on the optimizer
 
     def on_save(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
-        return self._check_max_epsilon_exceeded(state, control)
+        return self._check_max_epsilon_exceeded(control)
 
     def on_evaluate(self, args: training_args.TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
         return self._check_max_epsilon_exceeded(control)
@@ -55,24 +56,6 @@ class DPCallback(TrainerCallback):
             control.should_training_stop = True
         return control
 
-
-class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeling):
-    def __init__(self, tokenizer: PreTrainedTokenizer):
-        super().__init__(tokenizer=tokenizer, mlm=False)
-
-    def __call__(self, examples: List[Union[List[int], torch.Tensor, Dict[str, torch.Tensor]]]) -> Dict[str, torch.Tensor]:
-        batch = super().__call__(examples)
-
-        # Huggingface's default way of constructing position_ids is not compatible with Opacus
-        # since Opacus is not able to deduce the batch size from the input. Here we manually
-        # generate a position_ids tensor which has the same values as Huggingface's default tensor
-        # but it is constructed in a way that is compatile with Opacus by using expand_as.
-        if "position_ids" not in batch:
-            input_ids = batch["input_ids"]
-            batch["position_ids"] = torch.arange(
-                input_ids.shape[1], dtype=torch.long, device=input_ids.device
-            ).repeat(input_ids.shape[0], 1)
-        return batch
 
 
 class GradSampleModule(opacus.GradSampleModule):
@@ -108,6 +91,7 @@ class OpacusDPTrainer(Trainer):
         self,
         model: Union[modeling_utils.PreTrainedModel, torch.nn.modules.module.Module] = None,
         args: arguments.TrainingArguments = None,
+        data_collator: Optional[DataCollator] = None,
         train_dataset: Optional[torch.utils.data.dataset.Dataset] = None,
         callbacks: Optional[List[TrainerCallback]] = None,
         privacy_args: arguments.PrivacyArguments = None,
@@ -147,7 +131,8 @@ class OpacusDPTrainer(Trainer):
 
             self.privacy_engine = opacus.PrivacyEngine(secure_mode=self.privacy_args.secure_mode)
 
-        super().__init__(model=model, args=args, train_dataset=train_dataset, callbacks=callbacks, **kwargs)
+        super().__init__(model=model, args=args, data_collator=data_collator, train_dataset=train_dataset, callbacks=callbacks,
+                         **kwargs)
 
         if not self.privacy_args.disable_dp:
             super().create_optimizer()
@@ -165,12 +150,11 @@ class OpacusDPTrainer(Trainer):
                 )
             else:
                 self.dp_model, self.dp_optimizer, self.dp_train_dataloader = self.privacy_engine.make_private(
-                    madule=model,
+                    module=model,
                     data_loader=super().get_train_dataloader(),
                     optimizer=self.non_dp_optimizer,
                     max_grad_norm=self.privacy_args.per_sample_max_grad_norm,
                     noise_multiplier=self.privacy_args.noise_multiplier,
-                    target_delta=self.privacy_args.target_delta
                 )
             self.model = self.dp_model
             self.optimizer = self.dp_optimizer
@@ -179,15 +163,23 @@ class OpacusDPTrainer(Trainer):
                 data_loader=self.dp_train_dataloader, 
                 max_batch_size=self.privacy_args.max_physical_per_device_train_batch_size,
                 optimizer=self.dp_optimizer
+ 
             )
+            if data_collator is not None:
+                self.dp_train_dataloader.collate_fn = DataCollatorWithEmptyWrapper.from_batch(
+                    original_collator=data_collator,
+                    batch=next(iter(super().get_train_dataloader()))
+                )
         else:
             self.dp_model = None
             self.dp_optimizer = None
             self.dp_train_dataloader = None
 
-
     def compute_epsilon(self) -> float:
-        self.privacy_engine.get_epsilon(self.privacy_args.target_delta)
+        if self.privacy_args.disable_dp:
+            return float('inf')
+        else:
+            return self.privacy_engine.get_epsilon(self.privacy_args.target_delta)
 
     def create_optimizer(self):
         if self.privacy_args.disable_dp:
