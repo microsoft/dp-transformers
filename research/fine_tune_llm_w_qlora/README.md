@@ -11,6 +11,11 @@ We demonstrate examples of fine-tuning Mistral 7B using QLoRA with and without D
 | qnli       | Yes | 8xA100 |    3   |   94.80    |      8.0      |    .      | qnli/peft-eps_8.yml        |
 | qnli       | No  | 8xA100 |    3   |   96.40    | -             |    .      | qnli/peft-eps_inf.yml       |
 
+| Dataset (HF) | DP  | GPUs   | Epochs |   Val EM    |    Val F1   | $\varepsilon$ | Run Time [s] | AML Config |
+| ------------ | --- | ------ | ------ | ----------- | ----------- | ------------- | ------------ | ---------- |
+| squad        | Yes | 8xA100 |    10  |   87.50     |    93.43    |      8.0      |    .         | squad/peft-eps_8.yml |
+| squad        | No  | 8xA100 |    3   |   88.40     |    94.48    |        -      |    .         | squad/peft-eps_inf.yml |
+
 | Dataset (HF) | DP  | GPUs   | Epochs | Min Eval Loss | Test ROUGE1 | Test ROUGE2 | Test ROUGEL | $\varepsilon$ | Run Time [s] | AML Config |
 | ------------ | --- | ------ | ------ | ------------- | ----------- | ----------- | ----------- | ------------- | ------------ | ---------- |
 | cnn          | Yes | 8xA100 |    3   |     0.9624    |   44.16     |    22.16    |   30.99     |      8.0      |    .         | cnn/peft-eps_8.yml |
