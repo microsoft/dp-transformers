@@ -1,0 +1,44 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandJob.schema.json
+code: ../../../../
+command: >-
+  python -m pip install -e . && python -m torch.distributed.run --nproc_per_node 8 research/fine_tune_llm_w_qlora/fine-tune-dp.py \
+    --output_dir outputs \
+    --model_name mistralai/Mistral-7B-v0.1 \
+    --dataset_name squad \
+    --sequence_len 1024 \
+    --per_device_train_batch_size 16 \
+    --gradient_accumulation_steps 8 \
+    --evaluation_strategy steps \
+    --eval_steps 10 \
+    --save_strategy no \
+    --log_level info \
+    --per_device_eval_batch_size 32 \
+    --eval_accumulation_steps 1 \
+    --seed 42 \
+    --target_epsilon 8 \
+    --target_delta 1e-5 \
+    --per_sample_max_grad_norm 1.0 \
+    --weight_decay 0.01 \
+    --remove_unused_columns False \
+    --num_train_epochs 10 \
+    --logging_steps 5 \
+    --max_grad_norm 0 \
+    --lr_scheduler_type constant \
+    --learning_rate 3e-4 \
+    --disable_tqdm True \
+    --dataloader_num_workers 2 \
+    --lora_dim 4 \
+    --lora_alpha 32 \
+    --lora_dropout 0.0 \
+    --enable_lora \
+    --target_modules "['q_proj', 'v_proj']" \
+    --label_names labels \
+    --bf16 \
+    --gradient_checkpointing
+environment:
+  image: mcr.microsoft.com/azureml/openmpi4.1.0-cuda11.8-cudnn8-ubuntu22.04
+  conda_file: ../../environment.yml
+compute: azureml:ND96asrv4
+display_name: mistral_7b_qlora_dp_squad
+experiment_name: dp-transformers-mistral-7b-qlora-dp-squad
+description: DP fine-tune Mistral 7B model with QLoRA on Squad dataset

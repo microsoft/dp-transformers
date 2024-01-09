@@ -132,6 +132,206 @@ class QNLIDataset(Dataset):
         super().__init__(tokenizer, sequence_len)
 
 
+class SquadDataset(Dataset):
+    def __init__(self, tokenizer, sequence_len):
+        # Load data
+        self.dataset = datasets.load_dataset('squad')
+        self.dataset = self.dataset.map(
+            lambda x: {"text_concat": [context + " ### " + question for context, question in zip(x["context"], x["question"])]},
+            batched=True,
+            num_proc=8,
+        )
+        self.dataset = self.dataset.map(
+            lambda x: {"label": [answers['text'][0] for answers in x['answers']]},
+            batched=True,
+            num_proc=8,
+        )
+        # 10.6k eval samples too large, shuffle and reduce it to 1k
+        self.dataset['validation'] = self.dataset['validation'].shuffle().select(range(1000))
+        self.text_field = "text_concat"
+        self.prompt_begin = "Context and question separated with ### : "
+        self.prompt_end = " Answer :"
+        self.label_field = "label"
+        self.evaluate = evaluate.load("exact_match")
+        self.run_test = True
+        super().__init__(tokenizer, sequence_len)
+
+    # Modified from https://huggingface.co/docs/peft/task_guides/clm-prompt-tuning
+    # The only difference from above is that we add eos_token_id to the end of the input_ids to teach model to stop generating.
+    def squad_preprocess_function(self, examples, tokenizer, text_field, prompt_begin, prompt_end, label_field, sequence_len):
+        batch_size = len(examples[text_field])
+
+        # Prepare the context with the text in between of prompts, e.g. "Sentence : <text> Label :"
+        inputs = [prompt_begin + x + prompt_end for x in examples[text_field]]
+
+        # Prepare the prediction part
+        targets = [str(x) for x in examples[label_field]]
+
+        model_inputs = tokenizer(inputs)
+        labels = tokenizer(targets)
+
+        # Concatenate the context and prediction parts as one input and set -100 to the labels of the context part
+        # This is because only the label part will be used to calculate the loss
+        for i in range(batch_size):
+            sample_input_ids = model_inputs["input_ids"][i]
+            # Tokenizer adds <s> to input_ids so just take the rest
+            label_input_ids = labels["input_ids"][i][1:]
+            model_inputs["input_ids"][i] = sample_input_ids + label_input_ids + [tokenizer.eos_token_id]
+            labels["input_ids"][i] = [-100] * len(sample_input_ids) + label_input_ids + [tokenizer.eos_token_id]
+            model_inputs["attention_mask"][i] = [1] * len(model_inputs["input_ids"][i])
+
+        # Pad the samples with sequence_len and trim if longer than sequence_len
+        # NOTE THAT IF CONTEXT IS LONGER THAN SEQUENCE_LEN, THERE WILL BE NOTHING TO PREDICT, LABEL IS ALL -100
+        for i in range(batch_size):
+            sample_input_ids = model_inputs["input_ids"][i]
+            label_input_ids = labels["input_ids"][i]
+            model_inputs["input_ids"][i] = [tokenizer.pad_token_id] * (
+                sequence_len - len(sample_input_ids)
+            ) + sample_input_ids
+            model_inputs["attention_mask"][i] = [0] * (sequence_len - len(sample_input_ids)) + model_inputs[
+                "attention_mask"
+            ][i]
+            labels["input_ids"][i] = [-100] * (sequence_len - len(sample_input_ids)) + label_input_ids
+            model_inputs["input_ids"][i] = torch.tensor(model_inputs["input_ids"][i][:sequence_len])
+            model_inputs["attention_mask"][i] = torch.tensor(model_inputs["attention_mask"][i][:sequence_len])
+            labels["input_ids"][i] = torch.tensor(labels["input_ids"][i][:sequence_len])
+
+        model_inputs["labels"] = labels["input_ids"]
+        return model_inputs
+
+    def preprocess_function(self, example):
+        return self.squad_preprocess_function(example, self.tokenizer, self.text_field, self.prompt_begin,
+                                         self.prompt_end, self.label_field, self.sequence_len)
+
+    def compute_metrics(self, eval_pred):
+        predictions, labels = eval_pred
+        # Only keep predictions up to last token
+        predictions = predictions[..., :-1]
+        # Only keep labels from the first token
+        labels = labels[..., 1:]
+        # Replace -100 of the labels as we don't want the content
+        predictions = np.where(labels != -100, predictions, self.tokenizer.pad_token_id)
+        # Decode generated predictions into text
+        decoded_preds = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
+        # Replace -100 in the labels as we can't decode them
+        labels = np.where(labels != -100, labels, self.tokenizer.pad_token_id)
+        # Decode reference answers into text
+        decoded_labels = self.tokenizer.batch_decode(labels, skip_special_tokens=True)
+        # Compute exact match
+        result = self.evaluate.compute(
+            predictions=decoded_preds, references=decoded_labels
+        )
+        return result
+
+    def compute_test_metrics(self, trainer):
+        test_dataset = datasets.load_dataset("squad", split='validation')
+        self.evaluate = evaluate.load("squad")
+        # Add prompt_begin and prompt_end
+        test_dataset = test_dataset.map(
+            lambda x: {"text_concat": [self.prompt_begin + context + " ### " + question + self.prompt_end for 
+                                   context, question in zip(x["context"], x["question"])]},
+            batched=True,
+            num_proc=8,
+        )
+
+        # Tokenize data
+        def test_preprocess_function(examples):
+            model_inputs = trainer.tokenizer(examples['text_concat'], padding=False)
+            return model_inputs
+
+        with trainer.args.main_process_first(desc="tokenizing test dataset"):
+            test_dataset = test_dataset.map(
+                test_preprocess_function,
+                batched=True, num_proc=None, desc="tokenizing dataset",
+                )
+
+        def generate_batched(
+            model,
+            tokenizer,
+            device,
+            query_tensors,
+            batch_size: int = 4,
+            return_prompt: bool = True,
+            pad_to_multiple_of: int = None,
+            **generation_kwargs,
+        ):
+            outputs = []
+
+            tokenizer.padding_side = "left"
+
+            # handle distributed case and distribute query_tensors among gpus
+            query_tensors = query_tensors[device.index::trainer.args.world_size]
+
+            # in case we have fewer examples than bs
+            batch_size = min(len(query_tensors), batch_size)
+
+            for i in range(0, len(query_tensors), batch_size):
+                # prevent overflow if query tensors are not even multiple of bs
+                end_index = min(len(query_tensors), i + batch_size)
+
+                batch = query_tensors[i:end_index]
+                batch_mask = [torch.ones_like(torch.tensor(element)).tolist() for element in batch]
+                inputs = {"input_ids": batch, "attention_mask": batch_mask}
+
+                padded_inputs = tokenizer.pad(
+                    inputs,
+                    padding=True,
+                    max_length=None,
+                    pad_to_multiple_of=pad_to_multiple_of,
+                    return_tensors="pt",
+                ).to(device)
+
+                with torch.no_grad():
+                    generations = model.generate(**padded_inputs, **generation_kwargs)
+
+                for generation, mask in zip(generations, padded_inputs["attention_mask"]):
+                    output = generation[(1 - mask).sum() :]  # remove padding
+
+                    if not return_prompt:
+                        output = output[(mask).sum() :]  # remove prompt
+                    outputs.append(output)
+
+            return outputs
+
+        if hasattr(trainer.model, "generate"):
+            model = trainer.model
+        # The following is for GradSampleModule wrapping
+        elif hasattr(trainer.model._module, "generate"):
+            model = trainer.model._module
+        # The following is for GradSampleModule and DPDDP wrapping
+        elif hasattr(trainer.model._module.module, "generate"):
+            model = trainer.model._module.module
+        else:
+            raise ValueError("Cannot find generate function in the model.")
+
+        model.eval()
+        generation_kwargs = {"max_new_tokens": 50, "pad_token_id": trainer.tokenizer.pad_token_id, 
+                             "eos_token_id": trainer.tokenizer.eos_token_id,}
+
+        response_tensors = generate_batched(
+            model, trainer.tokenizer, trainer.args.device,
+            test_dataset["input_ids"],
+            batch_size=trainer.args.eval_batch_size, return_prompt=False,
+            **generation_kwargs
+        )
+
+        responses = [trainer.tokenizer.decode(r.squeeze(), skip_special_tokens=True) 
+                                    for r in response_tensors]
+
+        # Make squad evaluation format
+        predictions = [{'prediction_text':r, 'id':str(i)} for i, r in enumerate(responses)]
+        references = [{'answers': {'answer_start': a['answer_start'], 'text': a['text']}, 'id':str(i)} 
+                      for i, a in enumerate(test_dataset['answers'][trainer.args.device.index::trainer.args.world_size])]
+
+        result = self.evaluate.compute(predictions=predictions, references=references)
+
+        r1 = trainer.accelerator.reduce(torch.tensor(result['exact_match']).to(trainer.args.device), reduction="mean")
+        r2 = trainer.accelerator.reduce(torch.tensor(result['f1']).to(trainer.args.device), reduction="mean")
+
+        result = {'exact_match': r1.item(), 'f1': r2.item()}
+        return result
+
+
 class CNNDataset(Dataset):
     def __init__(self, tokenizer, sequence_len):
         # Load data
@@ -290,4 +490,4 @@ class CNNDataset(Dataset):
         return {k: round(v, 4) for k, v in result.items()}
 
 
-ALL_DATASETS = {"sst2": SST2Dataset, "qnli": QNLIDataset, "cnn": CNNDataset}
+ALL_DATASETS = {"sst2": SST2Dataset, "qnli": QNLIDataset, "squad": SquadDataset, "cnn": CNNDataset}
