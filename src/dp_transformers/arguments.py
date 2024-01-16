@@ -33,6 +33,9 @@ class PrivacyArguments:
     max_physical_per_device_train_batch_size: Optional[int] = field(default=None, metadata={
         "help": "Maximum physical batch size per device for training."
     })
+    poisson_sampling: bool = field(default=False, metadata={
+        "help": "Use Poisson sampling for DP-SGD."
+    })
 
     def __post_init__(self):
         if self.disable_dp:

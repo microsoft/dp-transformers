@@ -2,24 +2,18 @@
 # Licensed under the MIT License.
 
 import pandas as pd
-import datasets
 import torch
 import opacus
 from datasets import Dataset
 from opacus.utils.batch_memory_manager import wrap_data_loader
-from torch import nn
 from torch.utils.data import DataLoader
 from transformers import (
-    Trainer, TrainerCallback, TrainerState, TrainerControl, logging, DataCollator,
-    DataCollatorForLanguageModeling, PreTrainedTokenizer, training_args, modeling_utils
+    Trainer, TrainerCallback, TrainerState, TrainerControl, logging, DataCollator, training_args, modeling_utils
 )
-from transformers.file_utils import is_sagemaker_mp_enabled, is_datasets_available
 from contextlib import contextmanager
-from typing import Any, Callable, List, Optional, Union, Dict, Sequence
-from accelerate.optimizer import AcceleratedOptimizer
+from typing import Callable, List, Optional, Union, Dict, Sequence
 
-
-from dp_transformers import sampler, arguments
+from dp_transformers import arguments
 from dp_transformers.data import AuthorIndexedDataset
 from dp_transformers.data_collators import DataCollatorWithEmptyWrapper, DataCollatorForPrivateCausalLanguageModeling
 
@@ -146,7 +140,8 @@ class OpacusDPTrainer(Trainer):
                     max_grad_norm=self.privacy_args.per_sample_max_grad_norm,
                     target_epsilon=self.privacy_args.target_epsilon,
                     target_delta=self.privacy_args.target_delta,
-                    epochs=self.train_args.num_train_epochs
+                    epochs=self.train_args.num_train_epochs,
+                    poisson_sampling=self.privacy_args.poisson_sampling,
                 )
             else:
                 self.dp_model, self.dp_optimizer, self.dp_train_dataloader = self.privacy_engine.make_private(
@@ -155,6 +150,7 @@ class OpacusDPTrainer(Trainer):
                     optimizer=self.non_dp_optimizer,
                     max_grad_norm=self.privacy_args.per_sample_max_grad_norm,
                     noise_multiplier=self.privacy_args.noise_multiplier,
+                    poisson_sampling=self.privacy_args.poisson_sampling,
                 )
             self.model = self.dp_model
             self.optimizer = self.dp_optimizer
