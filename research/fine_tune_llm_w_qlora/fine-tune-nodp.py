@@ -1,19 +1,28 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-'''Train GPT2 model series with DP (w/ optional parameter-efficient approach LoRA)'''
+'''Train LLMs without DP using QLoRA'''
 
 import datasets
 import dp_transformers
 import transformers
 import sys
 import logging
+import torch
+import ast
+import data_utils
 
 from dataclasses import dataclass, field, asdict
-from peft import get_peft_model, LoraConfig
+from typing import List, Optional, Tuple, Union
+from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training
 
-from dp_transformers.grad_sample.transformers import conv_1d
+from pynvml import *
 
+def print_gpu_utilization():
+    nvmlInit()
+    handle = nvmlDeviceGetHandleByIndex(0)
+    info = nvmlDeviceGetMemoryInfo(handle)
+    print(f"GPU memory occupied: {info.used//1024**2} MB.")
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +31,9 @@ logger = logging.getLogger(__name__)
 class ModelArguments:
     model_name: str = field(default="gpt2", metadata={
         "help": "Model name in HuggingFace, e.g. 'gpt2'"
+    })
+    dataset_name: str = field(default="sst2", metadata={
+        "help": "Dataset name in HuggingFace, e.g. 'sst2'"
     })
     sequence_len: int = field(default=128, metadata={
         "help": "Maximum sequence length"
@@ -43,21 +55,29 @@ class LoraArguments:
         "help": "LoRA dropout"
     })
 
+    target_modules: List[str] = field(
+        default_factory=list,
+        metadata={
+            "help": "List of module names or regex expression of the module names to replace with Lora."
+            "For example, ['q', 'v'] or '.*decoder.*(SelfAttention|EncDecAttention).*(q|v)$' "
+        },
+    )
+
     def as_peft_config(self) -> LoraConfig:
         if not self.enable_lora:
             raise ValueError("LoRA is not enabled, cannot convert to LoRA config")
         params = asdict(self)
         params.pop("enable_lora")
         params["r"] = params.pop("lora_dim")
+        params["target_modules"] = ast.literal_eval(params["target_modules"][0])
         return LoraConfig(**params)
 
 
 @dataclass
 class Arguments:
     train: dp_transformers.TrainingArguments
-    privacy: dp_transformers.PrivacyArguments
     model: ModelArguments
-    lora: LoraConfig
+    lora: LoraArguments
 
 
 def main(args: Arguments):
@@ -83,25 +103,36 @@ def main(args: Arguments):
         f"distributed training: {bool(train_args.local_rank != -1)}, 16-bits training: {train_args.fp16}"
     )
     logger.info(f"Training/evaluation parameters {train_args}")
-    logger.info(f"Privacy parameters {privacy_args}")
-
-    # Load model
-    model = transformers.AutoModelForCausalLM.from_pretrained(args.model.model_name)
-    model = model.to(train_args.device)
-
-    # Load data
-    dataset = datasets.load_dataset('reddit', split="train[:500000]").train_test_split(0.02, seed=args.train.seed)
 
     # Load tokenizer
     tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name)
-    tokenizer.pad_token = tokenizer.eos_token
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+
+    # Load dataset
+    dataset = data_utils.ALL_DATASETS[args.model.dataset_name](tokenizer, args.model.sequence_len)
+
+    if dataset.classes is not None:
+        target_max_len = dataset.target_max_len()
+        logger.info(f"Labels tokenized into max length: {target_max_len}")
 
     # Tokenize data
     with train_args.main_process_first(desc="tokenizing dataset"):
-        dataset = dataset.map(
-            lambda batch: tokenizer(batch['content'], padding="max_length", truncation=True, max_length=args.model.sequence_len),
-            batched=True, num_proc=8, desc="tokenizing dataset", remove_columns=dataset.column_names['train']
+        dataset.dataset = dataset.dataset.map(
+            dataset.preprocess_function, batched=True, num_proc=8, desc="tokenizing dataset", 
+            remove_columns=dataset.dataset.column_names['train']
         )
+
+    bnb_config = transformers.BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16
+    )
+
+    # Load model
+    model = transformers.AutoModelForCausalLM.from_pretrained(args.model.model_name, quantization_config=bnb_config)
+    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=train_args.gradient_checkpointing)
 
     if args.lora.enable_lora:
         logger.info("Using LoRA")
@@ -113,31 +144,31 @@ def main(args: Arguments):
         logger.info(f"Total number of parameters of the model: {model.num_parameters(only_trainable=False)}")
         logger.info(f"Fine-tuned number of parameters of the model: {model.num_parameters(only_trainable=True)}")
 
-    model = model.cuda()
-    model.train()
-
-    data_collator = dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer)
-
-    trainer = dp_transformers.dp_utils.OpacusDPTrainer(
+    trainer = transformers.Trainer(
         args=train_args,
         model=model,
-        train_dataset=dataset['train'],
-        eval_dataset=dataset['test'],
-        data_collator=data_collator,
-        privacy_args=privacy_args,
+        train_dataset=dataset.dataset['train'],
+        eval_dataset=dataset.dataset['validation'],
+        tokenizer=tokenizer,
+        compute_metrics=dataset.compute_metrics,
+        preprocess_logits_for_metrics=dataset.preprocess_logits_for_metrics,
     )
 
-    try:
-        trainer.train()
-    finally:
-        eps_prv = trainer.get_prv_epsilon()
-        eps_rdp = trainer.get_rdp_epsilon()
-        trainer.log({
-            "final_epsilon_prv": eps_prv,
-            "final_epsilon_rdp": eps_rdp
-        })
+    result = trainer.train()
+
+    if dataset.run_test:
+        logger.info("Running test set evaluation after training")
+        test_metrics = dataset.compute_test_metrics(trainer)
+        trainer.log(test_metrics)
+
+    def print_summary(result):
+        print(f"Time: {result.metrics['train_runtime']:.2f}")
+        print(f"Samples/second: {result.metrics['train_samples_per_second']:.2f}")
+        print_gpu_utilization()
+
+    print_summary(result)
 
 if __name__ == "__main__":
-    arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, dp_transformers.PrivacyArguments, ModelArguments, LoraArguments))
-    train_args, privacy_args, model_args, lora_args = arg_parser.parse_args_into_dataclasses()
-    main(Arguments(train=train_args, privacy=privacy_args, model=model_args, lora=lora_args))
+    arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, ModelArguments, LoraArguments))
+    train_args, model_args, lora_args = arg_parser.parse_args_into_dataclasses()
+    main(Arguments(train=train_args, model=model_args, lora=lora_args))
