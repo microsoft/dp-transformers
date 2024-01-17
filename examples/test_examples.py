@@ -122,5 +122,5 @@ def test_nlg_reddit(az_workspace, example_test: ExampleTest):
     assert metrics["eval_loss"][-1] == pytest.approx(example_test.expected_val_loss, abs=0.02)
     allowed_time_delta = timedelta(minutes=0)
     if abs(metrics["runtime"] - example_test.expected_time) > allowed_time_delta:
-        print(f"::warning:: {example_test.aml_config_path} took {metrics['runtime']} to run, expected "
+        print(f"::warning file={__file__}:: {example_test.aml_config_path} took {metrics['runtime']} to run, expected "
               f"{example_test.expected_time} +- {allowed_time_delta}")
