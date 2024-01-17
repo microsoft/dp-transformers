@@ -94,7 +94,7 @@ dependencies:
       - gitpython==3.1.32
       - greenlet==2.0.2
       - gunicorn==21.2.0
-      - huggingface-hub==0.16.4
+      - huggingface-hub==0.19.4
       - idna==3.4
       - importlib-metadata==6.8.0
       - iniconfig==2.0.0
@@ -147,10 +147,10 @@ dependencies:
       - sqlparse==0.4.4
       - tabulate==0.9.0
       - threadpoolctl==3.2.0
-      - tokenizers==0.13.3
+      - tokenizers==0.15.0
       - tomli==2.0.1
       - tqdm==4.66.1
-      - transformers==4.31.0
+      - transformers==4.36.1
       - tzdata==2023.3
       - urllib3==1.26.16
       - websocket-client==1.6.1
