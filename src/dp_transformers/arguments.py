@@ -36,7 +36,7 @@ class PrivacyArguments:
     poisson_sampling: bool = field(default=False, metadata={
         "help": "Use Poisson sampling for DP-SGD."
     })
-    track_audit_signal: bool = field(defaut=False, metadata={
+    track_audit_signal: bool = field(default=False, metadata={
         "help": "Track auditing signal for DP-SGD."
     })
     canary_gradient_type: str = field(default="random", metadata={
