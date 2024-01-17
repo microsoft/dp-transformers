@@ -20,6 +20,13 @@ from dp_transformers.data_collators import DataCollatorWithEmptyWrapper, DataCol
 logger = logging.get_logger(__name__)
 
 
+def assert_privacy_estimates_available() -> None:
+    try:
+        import privacy_estimates
+    except ImportError:
+        raise ImportError("Please install `privacy_estimates` package to use --track_auditing_signal.")
+
+
 class DPCallback(TrainerCallback):
     """
     This class registers all the necessary callbacks to make transformers.Trainer compatible with opacus.
@@ -152,6 +159,13 @@ class OpacusDPTrainer(Trainer):
                     noise_multiplier=self.privacy_args.noise_multiplier,
                     poisson_sampling=self.privacy_args.poisson_sampling,
                 )
+            if self.privacy_args.track_auditing_signal:
+                assert_privacy_estimates_available()
+                canary_gradient = CanaryGradient.from_optimizer(
+                    self.dp_optimizer, method=self.privacy_args.canary_gradient_type,
+                    norm=self.privacy_args.per_sample_max_grad_norm, is_static=self.privacy_args.static_canary_gradient
+                ) 
+                self.dp_optimizer = CanaryTrackingOptimizer(self.dp_optimizer, canary_gradient=canary_gradient)
             self.model = self.dp_model
             self.optimizer = self.dp_optimizer
 
@@ -188,4 +202,23 @@ class OpacusDPTrainer(Trainer):
             return super().get_train_dataloader()
         else:
             return self.dp_train_dataloader
+
+    @property
+    def dp_parameters(self):
+        if self.privacy_args.disable_dp or not self.privacy_args.track_auditing_signal:
+            return None
+        else:
+            assert_privacy_estimates_available()
+            from privacy_estimates.experiments.utils import DPParameters
+            return DPParameters.from_opacus(self.privacy_engine)
+        
+    @property
+    def audit_signal(self):
+        if self.privacy_args.disable_dp or not self.privacy_args.track_auditing_signal:
+            return None
+        else:
+            assert_privacy_estimates_available()
+            from privacy_estimates.experiments.attacks.dpd import DPDistinguishingData
+            return DPDistinguishingData.from_opacus(optimizer=self.dp_optimizer)
+
  

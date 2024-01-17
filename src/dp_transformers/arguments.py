@@ -36,8 +36,22 @@ class PrivacyArguments:
     poisson_sampling: bool = field(default=False, metadata={
         "help": "Use Poisson sampling for DP-SGD."
     })
+    track_audit_signal: bool = field(defaut=False, metadata={
+        "help": "Track auditing signal for DP-SGD."
+    })
+    canary_gradient_type: str = field(default="random", metadata={
+        "help": "Type of canary gradient for DP-SGD."
+    })
+    static_canary_gradient: bool = field(default=False, metadata={
+        "help": "Use static canary gradient for DP-SGD or sample a new one for each update."
+    })
+    
 
     def __post_init__(self):
+        if np.isinf(self.target_epsilon):
+            print("Disabling differentially private training as target epsilon is infinite...")
+            self.disable_dp = True
+
         if self.disable_dp:
             logger.warning("Disabling differentially private training...")
             self.noise_multiplier = 0.0
