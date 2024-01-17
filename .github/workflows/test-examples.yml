@@ -29,4 +29,4 @@ jobs:
         az configure --defaults group=${{ secrets.AZ_RESOURCE_GROUP }} workspace=${{ secrets.AZ_WORKSPACE_NAME }}
     - name: Run examples with pytest
       run: |
-        pytest -n 16 examples -v --junitxml=junit/test-results.xml
+        pytest -n 16 -s examples -v --junitxml=junit/test-results.xml
