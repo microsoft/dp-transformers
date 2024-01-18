@@ -1,28 +1,29 @@
 name: Test examples
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch
 
 jobs:
-  run:
+  submit:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        example: [
-          "examples/nlg-reddit/sample-level-dp",
-          "examples/nlg-reddit/author-level-dp"
-        ]
+
     steps:
     - uses: actions/checkout@v3
-    - uses: conda-incubator/setup-miniconda@v2
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v3
       with:
-        activate-environment: env
-        environment-file: ${{ matrix.example }}/environment.yml
-        auto-activate-base: false
-    - name: Install package
+        python-version: 3.9
+    - name: Install dependencies
       run: |
-        /usr/share/miniconda/envs/env/bin/pip install -e .
+        python -m pip install --upgrade pip
+        python -m pip install azure-cli
+        az extension add -n ml
+        python -m pip install pytest pytest-xdist azureml-core
+    - name: Set up Azure ML CLI
+      run: |
+        az login --service-principal -u "${{ secrets.AZ_CLIENT_ID }}" -p "${{ secrets.AZ_CLIENT_SECRET }}" --tenant "${{ secrets.AZ_TENANT_ID }}"
+        az account set --subscription "${{ secrets.AZ_SUBSCRIPTION_ID }}"
+        az configure --defaults group=${{ secrets.AZ_RESOURCE_GROUP }} workspace=${{ secrets.AZ_WORKSPACE_NAME }}
+    - name: Run examples with pytest
+      run: |
+        pytest -n 16 -s examples -v --junitxml=junit/test-results.xml
