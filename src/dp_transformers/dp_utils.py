@@ -24,7 +24,7 @@ def assert_privacy_estimates_available() -> None:
     try:
         import privacy_estimates
     except ImportError:
-        raise ImportError("Please install `privacy_estimates` package to use --track_auditing_signal.")
+        raise ImportError("Please install `privacy_estimates` package to use --track_audit_signal.")
 
 
 class DPCallback(TrainerCallback):
@@ -159,7 +159,7 @@ class OpacusDPTrainer(Trainer):
                     noise_multiplier=self.privacy_args.noise_multiplier,
                     poisson_sampling=self.privacy_args.poisson_sampling,
                 )
-            if self.privacy_args.track_auditing_signal:
+            if self.privacy_args.track_audit_signal:
                 assert_privacy_estimates_available()
                 canary_gradient = CanaryGradient.from_optimizer(
                     self.dp_optimizer, method=self.privacy_args.canary_gradient_type,
@@ -205,7 +205,7 @@ class OpacusDPTrainer(Trainer):
 
     @property
     def dp_parameters(self):
-        if self.privacy_args.disable_dp or not self.privacy_args.track_auditing_signal:
+        if self.privacy_args.disable_dp or not self.privacy_args.track_audit_signal:
             return None
         else:
             assert_privacy_estimates_available()
@@ -214,7 +214,7 @@ class OpacusDPTrainer(Trainer):
         
     @property
     def audit_signal(self):
-        if self.privacy_args.disable_dp or not self.privacy_args.track_auditing_signal:
+        if self.privacy_args.disable_dp or not self.privacy_args.track_audit_signal:
             return None
         else:
             assert_privacy_estimates_available()
