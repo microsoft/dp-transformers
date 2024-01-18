@@ -27,29 +27,15 @@ class PrivacyArguments:
     disable_dp: bool = field(default=False, metadata={
         "help": "Disable DP training."
     })
-
-    def initialize(self, sampling_probability: float, num_steps: int, num_samples: int) -> None:
-        if self.target_delta is None:
-            self.target_delta = 1.0/num_samples
-        logger.info(f"The target delta is set to be: {self.target_delta}")
-
-        # Set up noise multiplier
-        if self.noise_multiplier is None:
-            self.noise_multiplier = find_noise_multiplier(
-                sampling_probability=sampling_probability,
-                num_steps=num_steps,
-                target_delta=self.target_delta,
-                target_epsilon=self.target_epsilon
-            )
-        logger.info(f"The noise multiplier is set to be: {self.noise_multiplier}")
-
-    @property
-    def is_initialized(self) -> bool:
-        return (
-            self.per_sample_max_grad_norm is not None and
-            self.noise_multiplier is not None and
-            self.target_delta is not None
-        )
+    secure_mode: bool = field(default=False, metadata={
+        "help": "Use secure mode for DP-SGD."
+    })
+    max_physical_per_device_train_batch_size: Optional[int] = field(default=None, metadata={
+        "help": "Maximum physical batch size per device for training."
+    })
+    poisson_sampling: bool = field(default=False, metadata={
+        "help": "Use Poisson sampling for DP-SGD."
+    })
 
     def __post_init__(self):
         if self.disable_dp:
@@ -57,6 +43,8 @@ class PrivacyArguments:
             self.noise_multiplier = 0.0
             self.per_sample_max_grad_norm = float('inf')
             self.target_epsilon = None
+            if self.max_physical_per_device_train_batch_size is not None:
+                raise ValueError("DP training is disabled, --max_physical_per_device_train_batch_size is not needed.")
         else:
             if bool(self.target_epsilon) == bool(self.noise_multiplier):
                 raise ValueError("Exactly one of the arguments --target_epsilon and --noise_multiplier must be used.")
