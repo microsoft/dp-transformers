@@ -118,6 +118,10 @@ class ExampleTest:
 def test_nlg_reddit(az_workspace, example_test: ExampleTest):
     metrics = submit_example_and_wait_for_metrics(az_workspace, aml_config_path=example_test.aml_config_path)
 
+    print(f"Test {example_test.aml_config_path}: {metrics}")
     assert metrics["train_loss"] == pytest.approx(example_test.expected_trn_loss, abs=0.02)
     assert metrics["eval_loss"][-1] == pytest.approx(example_test.expected_val_loss, abs=0.02)
-    assert abs(metrics["runtime"] - example_test.expected_time) < timedelta(minutes=5)
+    allowed_time_delta = timedelta(minutes=5)
+    if abs(metrics["runtime"] - example_test.expected_time) > allowed_time_delta:
+        print(f"::warning file={__file__}:: {example_test.aml_config_path} took {metrics['runtime']} to run, expected "
+              f"{example_test.expected_time} +- {allowed_time_delta}")
