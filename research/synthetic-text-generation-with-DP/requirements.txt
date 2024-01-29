@@ -2,7 +2,7 @@ numpy
 pandas==1.5.3
 scikit-learn
 torch==1.12.1
-transformers==4.20.1
+transformers==4.30.0
 datasets==2.0.0
 prv-accountant==0.1.1.post1
 opacus==1.2.0
