@@ -11,6 +11,7 @@ import logging
 
 from dataclasses import dataclass, field, asdict
 from peft import get_peft_model, LoraConfig
+from multiprocessing import cpu_count
 
 from dp_transformers.grad_sample.transformers import conv_1d
 
@@ -100,7 +101,7 @@ def main(args: Arguments):
     with args.train.main_process_first(desc="tokenizing dataset"):
         dataset = dataset.map(
             lambda batch: tokenizer(batch['content'], padding="max_length", truncation=True, max_length=args.model.sequence_len),
-            batched=True, num_proc=8, desc="tokenizing dataset", remove_columns=dataset.column_names['train']
+            batched=True, num_proc=cpu_count(), desc="tokenizing dataset", remove_columns=dataset.column_names['train']
         )
 
     if args.lora.enable_lora:

@@ -5,22 +5,24 @@ command: >-
     --output_dir outputs \
     --model_name gpt2 \
     --sequence_len 128 \
-    --per_device_train_batch_size 64 \
-    --gradient_accumulation_steps 16 \
-    --evaluation_strategy steps \
-    --eval_steps 128 \
+    --per_device_train_batch_size 1024 \
+    --max_physical_per_device_train_batch_size 64 \
+    --gradient_accumulation_steps 1 \
+    --evaluation_strategy epoch \
     --log_level info \
     --per_device_eval_batch_size 64 \
     --eval_accumulation_steps 1 \
     --seed 42 \
     --target_epsilon 8 \
     --target_delta 2e-6 \
+    --poisson_sampling \
     --per_sample_max_grad_norm 1.0 \
     --prediction_loss_only \
     --weight_decay 0.01 \
     --remove_unused_columns False \
     --num_train_epochs 3 \
-    --logging_steps 5 \
+    --logging_steps 10 \
+    --logging_strategy steps \
     --max_grad_norm 0 \
     --lr_scheduler_type constant \
     --learning_rate 1e-4 \
@@ -29,8 +31,8 @@ command: >-
     --lora_dim 4 \
     --lora_alpha 32 \
     --lora_dropout 0.0 \
-    --label_names labels \
-    --enable_lora
+    --enable_lora \
+    --label_names labels
 environment:
   image: mcr.microsoft.com/azureml/openmpi4.1.0-cuda11.8-cudnn8-ubuntu22.04
   conda_file: ../environment.yml
