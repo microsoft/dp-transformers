@@ -96,6 +96,9 @@ class OpacusDPTrainer(Trainer):
         self.train_args = args
         self.privacy_args = privacy_args
 
+        if train_dataset is None:
+            train_dataset = []
+
         # Sample-level DP is equivalent to mapping each sample to a unique author. 
         if author_mapping is None:
             author_mapping = [[i] for i in range(len(train_dataset))]
