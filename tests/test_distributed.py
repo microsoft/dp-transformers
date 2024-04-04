@@ -128,3 +128,7 @@ def test_distributed_training():
 
     eval_loss = compute_eval_loss(data=eval_data, model=model)
 
+
+# Test's to implement
+# - Disabling DP in DP Trainer yields same result as non-DP Trainer
+# - Scaling number of processes gives the same results for DP Trainer
