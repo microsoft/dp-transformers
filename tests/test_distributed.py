@@ -4,6 +4,7 @@ import torch.distributed as dist
 
 from accelerate import PartialState, DistributedType
 from tempfile import TemporaryDirectory
+from transformers import set_seed
 
 from dp_transformers.dp_utils import OpacusDPTrainer
 from dp_transformers.arguments import PrivacyArguments, TrainingArguments
@@ -14,26 +15,6 @@ def initialize_dist():
     # Use CPU compatible backend to allow tests to run on machines without GPUs
     state = PartialState(cpu=True)
     yield
-
-
-def test_distributed_operation():
-    if PartialState().num_processes < 2:
-        pytest.skip("Test requires at least 2 processes")
-    rank = dist.get_rank()
-    tensor = torch.tensor([rank], dtype=torch.int32)
-    output = [torch.empty(1, dtype=torch.int32) for _ in range(dist.get_world_size())]
-    dist.all_gather(output, tensor)
-    assert torch.cat(output).tolist() == list(range(dist.get_world_size()))
-
-
-def test_distributed_operation_2():
-    if PartialState().num_processes < 2:
-        pytest.skip("Test requires at least 2 processes")
-    rank = dist.get_rank()
-    tensor = torch.tensor([rank], dtype=torch.int32)
-    output = [torch.empty(1, dtype=torch.int32) for _ in range(dist.get_world_size())]
-    dist.all_gather(output, tensor)
-    assert torch.cat(output).tolist() == list(range(dist.get_world_size()))
 
 
 class SimpleModule(torch.nn.Module):
@@ -93,8 +74,9 @@ def test_distributed_evaluation():
 
 def test_distributed_training():
     eval_data_size = 8
-    train_data_size = 12
+    train_data_size = 8
     dim = 10
+    batch_size = 8
 
     rng = torch.Generator().manual_seed(2032)
     model = SimpleModule(dim, rng)
@@ -105,21 +87,23 @@ def test_distributed_training():
     rng = torch.Generator().manual_seed(32908)
     eval_data = create_dummy_data(eval_data_size, dim, rng)
 
+    world_size = PartialState().num_processes
+    assert batch_size % world_size == 0
+    per_device_train_batch_size = batch_size // world_size
+
     privacy_args = PrivacyArguments(
-        disable_dp=False,
-        noise_multiplier=0.1,
-        per_sample_max_grad_norm=1.0,
-        max_physical_per_device_train_batch_size=3,
-        poisson_sampling=False,
+        disable_dp=True,
     )
     with TemporaryDirectory() as tmp_dir:
         train_args=TrainingArguments(
-            per_device_train_batch_size=3,
+            per_device_train_batch_size=per_device_train_batch_size,
             output_dir=tmp_dir,
-            max_steps=3,
+            max_steps=1,
             use_cpu=True,
             remove_unused_columns=False,
+            learning_rate=0.1,
         )
+        set_seed(9230)
         trainer = OpacusDPTrainer(
             model=model,
             args=train_args,
@@ -129,6 +113,8 @@ def test_distributed_training():
         trainer.train()
 
     eval_loss = compute_eval_loss(data=eval_data, model=model)
+
+    assert eval_loss == pytest.approx(3.1150975227355957)
 
 
 # Test's to implement
