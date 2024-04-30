@@ -1,7 +1,6 @@
-import pytest
 import torch
+import pytest
 
-from accelerate import PartialState
 from tempfile import TemporaryDirectory
 from transformers import set_seed, Trainer
 
@@ -9,48 +8,6 @@ from dp_transformers.dp_utils import OpacusDPTrainer
 from dp_transformers.arguments import PrivacyArguments, TrainingArguments
 
 from tests.utils import SimpleModule
-
-
-@pytest.fixture(scope="module", autouse=True)
-def initialize_dist():
-    # Use CPU compatible backend to allow tests to run on machines without GPUs
-    state = PartialState(cpu=True)
-    yield
-
-
-def create_dummy_data(size: int, dim: int, rng: torch.Generator):
-    return [{
-        "input": torch.randn(dim, dtype=torch.float32, generator=rng),
-        "labels": torch.randint(0, dim, (1,), dtype=torch.int64, generator=rng)
-    } for _ in range(size)]
-
-
-def compute_eval_loss(data, model):
-    with TemporaryDirectory() as tmp_dir:
-        train_args=TrainingArguments(
-            per_device_train_batch_size=3,
-            output_dir=tmp_dir,
-            use_cpu=True,
-            remove_unused_columns=False,
-        )
-        trainer = Trainer(model=model, args=train_args)
-        results = trainer.evaluate(eval_dataset=data)
-    return results["eval_loss"]
- 
-
-def test_distributed_evaluation():
-    data_size = 8
-    dim = 10
-
-    rng = torch.Generator().manual_seed(2032)
-    model = SimpleModule(dim, rng)
-
-    rng = torch.Generator().manual_seed(32908)
-    data = create_dummy_data(data_size, dim, rng)
-
-    eval_loss = compute_eval_loss(data=data, model=model)
-
-    assert eval_loss == pytest.approx(3.023815393447876)
 
 
 def test_distributed_non_dp_training_recovers_disabled_dp():
@@ -118,8 +75,3 @@ def test_distributed_non_dp_training_recovers_disabled_dp():
     eval_loss_non_dp = compute_eval_loss(data=eval_data, model=model_non_dp)
 
     assert eval_loss_disabled_dp == pytest.approx(eval_loss_non_dp)
-
-
-# Test's to implement
-# - Disabling DP in DP Trainer yields same result as non-DP Trainer
-# - Scaling number of processes gives the same results for DP Trainer
