@@ -65,6 +65,7 @@ def compute_eval_loss(data, model):
             per_device_train_batch_size=3,
             output_dir=tmp_dir,
             use_cpu=True,
+            remove_unused_columns=False,
         )
         trainer = OpacusDPTrainer(
             model=model,
@@ -117,6 +118,7 @@ def test_distributed_training():
             output_dir=tmp_dir,
             max_steps=3,
             use_cpu=True,
+            remove_unused_columns=False,
         )
         trainer = OpacusDPTrainer(
             model=model,
