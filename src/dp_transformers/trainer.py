@@ -2,13 +2,16 @@ import torch
 import opacus
 
 from typing import Dict, Optional, Sequence, Union, List
-from transformers import Trainer, modeling_utils, TrainerCallback, DataCollator, training_args
+from transformers import Trainer, modeling_utils, TrainerCallback, DataCollator, training_args, logging
 from opacus.utils.batch_memory_manager import wrap_data_loader
 from torch.utils.data import DataLoader
 
 from dp_transformers.data import AuthorIndexedDataset
 from dp_transformers import arguments
 from dp_transformers.callbacks import DPCallback
+
+
+logger = logging.get_logger(__name__)
 
 
 class DPTrainer(Trainer):
@@ -89,9 +92,12 @@ class DPTrainer(Trainer):
             self.model = self.dp_model
             self.optimizer = self.dp_optimizer
 
+            # Use the regular batch size if no max_physical_per_device_train_batch_size is provided
+            max_batch_size = self.privacy_args.max_physical_per_device_train_batch_size or self.train_args.per_device_train_batch_size
+
             self.dp_train_dataloader = wrap_data_loader(
                 data_loader=self.dp_train_dataloader, 
-                max_batch_size=self.privacy_args.max_physical_per_device_train_batch_size,
+                max_batch_size=max_batch_size,
                 optimizer=self.dp_optimizer
  
             )

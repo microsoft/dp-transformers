@@ -46,7 +46,7 @@ class PrivacyArguments:
             if self.max_physical_per_device_train_batch_size is not None:
                 raise ValueError("DP training is disabled, --max_physical_per_device_train_batch_size is not needed.")
         else:
-            if bool(self.target_epsilon) == bool(self.noise_multiplier):
+            if (self.target_epsilon is None) == (self.noise_multiplier is None):
                 raise ValueError("Exactly one of the arguments --target_epsilon and --noise_multiplier must be used.")
             if self.per_sample_max_grad_norm is None:
                 raise ValueError("DP training requires --per_sample_max_grad_norm argument.")

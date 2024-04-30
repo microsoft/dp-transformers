@@ -3,6 +3,7 @@ import pytest
 
 from tempfile import TemporaryDirectory
 from transformers import set_seed, Trainer
+from accelerate import PartialState, DistributedType
 
 from dp_transformers.dp_utils import OpacusDPTrainer
 from dp_transformers.arguments import PrivacyArguments, TrainingArguments
@@ -11,10 +12,17 @@ from utils import SimpleModule, create_dummy_data, compute_eval_loss
 
 
 def test_distributed_non_dp_training_recovers_disabled_dp():
+    """
+    Ensure that if we use the DPTrainer but disable DP, we get the same results as non-DP training.
+    """
+    if PartialState().distributed_type != DistributedType.NO:
+        pytest.skip("This test should only run in non-distributed mode")
+
     eval_data_size = 8
     train_data_size = 8
     dim = 10
-    batch_size = 8
+    batch_size = 4
+    max_steps = 16
 
     rng = torch.Generator().manual_seed(2032)
     model_non_dp = SimpleModule(dim, rng)
@@ -35,7 +43,7 @@ def test_distributed_non_dp_training_recovers_disabled_dp():
         train_args=TrainingArguments(
             per_device_train_batch_size=batch_size,
             output_dir=tmp_dir,
-            max_steps=1,
+            max_steps=max_steps,
             use_cpu=True,
             remove_unused_columns=False,
             learning_rate=0.1,
@@ -55,7 +63,7 @@ def test_distributed_non_dp_training_recovers_disabled_dp():
         train_args=TrainingArguments(
             per_device_train_batch_size=batch_size,
             output_dir=tmp_dir,
-            max_steps=1,
+            max_steps=max_steps,
             use_cpu=True,
             remove_unused_columns=False,
             learning_rate=0.1,
