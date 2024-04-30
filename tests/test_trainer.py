@@ -7,7 +7,7 @@ from transformers import set_seed, Trainer
 from dp_transformers.dp_utils import OpacusDPTrainer
 from dp_transformers.arguments import PrivacyArguments, TrainingArguments
 
-from tests.utils import SimpleModule
+from utils import SimpleModule, create_dummy_data, compute_eval_loss
 
 
 def test_distributed_non_dp_training_recovers_disabled_dp():
@@ -28,16 +28,12 @@ def test_distributed_non_dp_training_recovers_disabled_dp():
     rng = torch.Generator().manual_seed(32908)
     eval_data = create_dummy_data(eval_data_size, dim, rng)
 
-    world_size = PartialState().num_processes
-    assert batch_size % world_size == 0
-    per_device_train_batch_size = batch_size // world_size
-
     privacy_args = PrivacyArguments(
         disable_dp=True,
     )
     with TemporaryDirectory() as tmp_dir:
         train_args=TrainingArguments(
-            per_device_train_batch_size=per_device_train_batch_size,
+            per_device_train_batch_size=batch_size,
             output_dir=tmp_dir,
             max_steps=1,
             use_cpu=True,
@@ -57,7 +53,7 @@ def test_distributed_non_dp_training_recovers_disabled_dp():
 
     with TemporaryDirectory() as tmp_dir:
         train_args=TrainingArguments(
-            per_device_train_batch_size=per_device_train_batch_size,
+            per_device_train_batch_size=batch_size,
             output_dir=tmp_dir,
             max_steps=1,
             use_cpu=True,

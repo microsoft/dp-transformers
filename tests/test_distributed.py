@@ -8,7 +8,7 @@ from transformers import set_seed, Trainer
 from dp_transformers.dp_utils import OpacusDPTrainer
 from dp_transformers.arguments import PrivacyArguments, TrainingArguments
 
-from tests.utils import SimpleModule
+from utils import SimpleModule
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -17,26 +17,6 @@ def initialize_dist():
     state = PartialState(cpu=True)
     yield
 
-
-def create_dummy_data(size: int, dim: int, rng: torch.Generator):
-    return [{
-        "input": torch.randn(dim, dtype=torch.float32, generator=rng),
-        "labels": torch.randint(0, dim, (1,), dtype=torch.int64, generator=rng)
-    } for _ in range(size)]
-
-
-def compute_eval_loss(data, model):
-    with TemporaryDirectory() as tmp_dir:
-        train_args=TrainingArguments(
-            per_device_train_batch_size=3,
-            output_dir=tmp_dir,
-            use_cpu=True,
-            remove_unused_columns=False,
-        )
-        trainer = Trainer(model=model, args=train_args)
-        results = trainer.evaluate(eval_dataset=data)
-    return results["eval_loss"]
- 
 
 def test_distributed_evaluation():
     data_size = 8

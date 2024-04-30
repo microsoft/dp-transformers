@@ -1,9 +1,12 @@
 import torch
+import opacus
 
 from typing import Dict, Optional, Sequence, Union, List
-from transformers import Trainer, modeling_utils, TrainerCallback, DataCollator
+from transformers import Trainer, modeling_utils, TrainerCallback, DataCollator, training_args
+from opacus.utils.batch_memory_manager import wrap_data_loader
+from torch.utils.data import DataLoader
 
-from dp_transfomers.data import AuthorIndexedDataset
+from dp_transformers.data import AuthorIndexedDataset
 from dp_transformers import arguments
 from dp_transformers.callbacks import DPCallback
 
