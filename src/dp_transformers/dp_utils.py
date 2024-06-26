@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from typing import Sequence
 
 from dp_transformers.trainer import DPTrainer
+from dp_transformers.data_collators import DataCollatorForPrivateCausalLanguageModeling
 
 
 class GradSampleModule(opacus.GradSampleModule):
