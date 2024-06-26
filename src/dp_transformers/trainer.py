@@ -101,11 +101,6 @@ class DPTrainer(Trainer):
                 optimizer=self.dp_optimizer
  
             )
-            if data_collator is not None:
-                self.dp_train_dataloader.collate_fn = DataCollatorWithEmptyWrapper.from_batch(
-                    original_collator=data_collator,
-                    batch=next(iter(super().get_train_dataloader()))
-                )
         else:
             self.dp_model = None
             self.dp_optimizer = None
