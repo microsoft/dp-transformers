@@ -17,7 +17,7 @@ class TestFindNoiseMultiplier:
         assert eps[2] == pytest.approx(4, abs=0.5)
 
     def test_robustness(self):
-        with pytest.warns(None) as record:
+        with pytest.warns() as record:
             mu = find_noise_multiplier(
                 sampling_probability=256/50_000,
                 num_steps=int(50*50_000/256),
