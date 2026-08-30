@@ -39,3 +39,7 @@ jobs:
     - name: Test with pytest
       run: |
         pytest tests
+    - name: Test with pytest (distributed)
+      run: |
+        torchrun --nproc-per-node 2 -m pytest tests/test_distributed.py
+        torchrun --nproc-per-node 4 -m pytest tests/test_distributed.py

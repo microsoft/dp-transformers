@@ -1,9 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+import pytest
+import warnings
 
 from dp_transformers.arguments import find_noise_multiplier
 from prv_accountant import Accountant
-import pytest
 
 class TestFindNoiseMultiplier:
     def test_sensible_range(self):
@@ -17,7 +18,7 @@ class TestFindNoiseMultiplier:
         assert eps[2] == pytest.approx(4, abs=0.5)
 
     def test_robustness(self):
-        with pytest.warns(None) as record:
+        with warnings.catch_warnings(record=True) as record:
             mu = find_noise_multiplier(
                 sampling_probability=256/50_000,
                 num_steps=int(50*50_000/256),
