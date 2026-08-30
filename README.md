@@ -131,7 +131,7 @@ Definitely, before the model is wrapped with `GradSampleModule`.
 
 ```
 @misc{dp-transformers,
-  author        = {Lukas Wutschitz and Huseyin A. Inan and Andre Manoel},
+  author        = {Lukas Wutschitz and Huseyin A. Inan and Andre Manoel and Daniel Jones},
   title         = {dp-transformers: Training transformer models with differential privacy},
   year          = {2022},
   month         = {August},
