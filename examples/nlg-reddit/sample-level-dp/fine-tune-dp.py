@@ -70,7 +70,7 @@ def main(args: Arguments):
         handlers=[logging.StreamHandler(sys.stdout)],
     )
 
-    log_level = train_args.get_process_log_level()
+    log_level = args.train.get_process_log_level()
     logger.setLevel(log_level)
     datasets.utils.logging.set_verbosity(log_level)
     transformers.utils.logging.set_verbosity(log_level)
@@ -79,15 +79,15 @@ def main(args: Arguments):
 
     # Log on each process the small summary:
     logger.warning(
-        f"Process rank: {train_args.local_rank}, device: {train_args.device}, n_gpu: {train_args.n_gpu}, "
-        f"distributed training: {bool(train_args.local_rank != -1)}, 16-bits training: {train_args.fp16}"
+        f"Process rank: {args.train.local_rank}, device: {args.train.device}, n_gpu: {args.train.n_gpu}, "
+        f"distributed training: {bool(args.train.local_rank != -1)}, 16-bits training: {args.train.fp16}"
     )
-    logger.info(f"Training/evaluation parameters {train_args}")
-    logger.info(f"Privacy parameters {privacy_args}")
+    logger.info(f"Training/evaluation parameters {args.train}")
+    logger.info(f"Privacy parameters {args.privacy}")
 
     # Load model
     model = transformers.AutoModelForCausalLM.from_pretrained(args.model.model_name)
-    model = model.to(train_args.device)
+    model = model.to(args.train.device)
 
     # Load data
     dataset = datasets.load_dataset('reddit', split="train[:500000]").train_test_split(0.02, seed=args.train.seed)
@@ -97,7 +97,7 @@ def main(args: Arguments):
     tokenizer.pad_token = tokenizer.eos_token
 
     # Tokenize data
-    with train_args.main_process_first(desc="tokenizing dataset"):
+    with args.train.main_process_first(desc="tokenizing dataset"):
         dataset = dataset.map(
             lambda batch: tokenizer(batch['content'], padding="max_length", truncation=True, max_length=args.model.sequence_len),
             batched=True, num_proc=8, desc="tokenizing dataset", remove_columns=dataset.column_names['train']
@@ -109,7 +109,7 @@ def main(args: Arguments):
     else:
         logger.info("Not using LoRA")
 
-    if train_args.local_rank == 0:
+    if args.train.local_rank == 0:
         logger.info(f"Total number of parameters of the model: {model.num_parameters(only_trainable=False)}")
         logger.info(f"Fine-tuned number of parameters of the model: {model.num_parameters(only_trainable=True)}")
 
@@ -119,23 +119,20 @@ def main(args: Arguments):
     data_collator = dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer)
 
     trainer = dp_transformers.dp_utils.OpacusDPTrainer(
-        args=train_args,
+        args=args.train,
         model=model,
         train_dataset=dataset['train'],
         eval_dataset=dataset['test'],
         data_collator=data_collator,
-        privacy_args=privacy_args,
+        privacy_args=args.privacy,
     )
 
     try:
         trainer.train()
     finally:
-        eps_prv = trainer.get_prv_epsilon()
-        eps_rdp = trainer.get_rdp_epsilon()
-        trainer.log({
-            "final_epsilon_prv": eps_prv,
-            "final_epsilon_rdp": eps_rdp
-        })
+        eps  = trainer.compute_epsilon()
+        trainer.log({"final_epsilon": eps})
+
 
 if __name__ == "__main__":
     arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, dp_transformers.PrivacyArguments, ModelArguments, LoraArguments))
